@@ -1,5 +1,8 @@
 use orgarq::assemble;
 
 fn main() {
-    assemble("ex.qck", "a.fita").unwrap();
+    match assemble("ex.qck", "ex.fita") {
+        Ok(_) => (),
+        Err(why) => println!("{}", why),
+    }
 }

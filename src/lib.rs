@@ -51,22 +51,27 @@ pub fn assemble(in_asm: &str, out: &str) -> io::Result<()> {
             }
         }
     });
-    let mut text = String::new();
+    let mut buf = Vec::new();
     s.lines().for_each(|line| {
         let mut tokens = line.split_whitespace();
         if let Some(token) = tokens.next() {
             let instr = token;
             if let Some(token) = tokens.next() {
-                let op = OpCodes::from_str(instr).unwrap() as u32;
+                let op = OpCodes::from_str(instr).unwrap();
                 let field = match symbol_table.contains_key(token) {
                     true => symbol_table[token],
                     false => u32::from_str_radix(token, 16).unwrap(),
                 };
-                text += format!("{:08X}\n", op << 27 | field).as_str();
+                buf.push((op as u32) << 27 | field);
             }
         }
     });
-    print!("{}", text);
-    fs::write(out, text)?;
+    fs::write(
+        out,
+        buf.into_iter()
+            .map(|seq| seq.to_le_bytes())
+            .flatten()
+            .collect::<Vec<_>>(),
+    )?;
     Ok(())
 }
