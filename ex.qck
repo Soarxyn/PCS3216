@@ -1,0 +1,6 @@
+main:
+    ADD 093
+    SUB 3E6
+    LDA um
+um:
+   5
