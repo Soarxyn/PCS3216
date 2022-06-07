@@ -1,4 +1,4 @@
-use orgarq::assemble;
+use sisprog::assemble;
 
 fn main() {
     match assemble("ex.qck", "ex.fita") {
