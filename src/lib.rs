@@ -1,3 +1,5 @@
+pub mod processor;
+
 use std::{collections::HashMap, fs, str::FromStr};
 extern crate strum;
 #[macro_use]
