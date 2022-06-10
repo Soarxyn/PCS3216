@@ -1,4 +1,4 @@
-use super::memory::{MemoryMapped, IMem, DMem, Stack, IOMem, MEM_SIZE};
+use super::memory::{DMem, IMem, IOMem, MemoryMapped, Stack, MEM_SIZE};
 
 pub struct CPU {
     pub acc: u32,
@@ -8,7 +8,16 @@ pub struct CPU {
 
 impl Default for CPU {
     fn default() -> Self {
-        CPU { acc: 0, pc: 0, mem: vec![Box::new(IMem([0; MEM_SIZE])), Box::new(DMem([0; MEM_SIZE])), Box::new(Stack([0; MEM_SIZE])), Box::new(IOMem([0; MEM_SIZE]))] }
+        CPU {
+            acc: 0,
+            pc: 0,
+            mem: vec![
+                Box::new(IMem([0; MEM_SIZE])),
+                Box::new(DMem([0; MEM_SIZE])),
+                Box::new(Stack([0; MEM_SIZE])),
+                Box::new(IOMem([0; MEM_SIZE])),
+            ],
+        }
     }
 }
 
@@ -26,7 +35,7 @@ impl CPU {
         for page in &mut self.mem {
             if page.in_range(addr) {
                 page.write(addr, val);
-                return Ok(())
+                return Ok(());
             }
         }
         Err(format!("[CPU] Could not find memory address: {}", addr))

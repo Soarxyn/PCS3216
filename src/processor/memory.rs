@@ -4,7 +4,7 @@ pub trait MemoryMapped {
     fn in_range(&self, addr: u32) -> bool;
 }
 
-pub const MEM_SIZE: usize = 2 << 25;
+pub const MEM_SIZE: usize = 1 << 25;
 
 macro_rules! map_memory {
     ($mem_name:ident, $msb:expr) => {
@@ -14,16 +14,16 @@ macro_rules! map_memory {
             fn read(&self, addr: u32) -> u32 {
                 self.0[(addr % MEM_SIZE as u32) as usize]
             }
-        
+
             fn write(&mut self, addr: u32, val: u32) {
                 self.0[(addr % MEM_SIZE as u32) as usize] = val;
             }
-        
+
             fn in_range(&self, addr: u32) -> bool {
                 (addr >> 25) == $msb
             }
         }
-    }
+    };
 }
 
 map_memory!(IMem, 0);
