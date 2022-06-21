@@ -91,7 +91,7 @@ pub fn assemble(in_asm: &str, breadcrumb: Option<&str>) -> Result<(), String> {
                                     ));
                                 }
                                 labels.push_str(token);
-                                labels.push_str(&(i - offset).to_string());
+                                labels.push_str((i - offset).to_string().as_str());
                                 labels.push('\n');
                                 offset += 1;
                             }
@@ -106,29 +106,38 @@ pub fn assemble(in_asm: &str, breadcrumb: Option<&str>) -> Result<(), String> {
                                                         code.push('\n');
                                                     }
                                                     1 => match tokens.next() {
-                                                        Some(arg) => {
-                                                            code.push_str("PRINT");
-                                                            code.push(' ');
-                                                            code.push_str(arg);
-                                                            code.push('\n');
+                                                        Some(arg) => match arg.starts_with("//") {
+                                                            true => return Err(format!("Expected label at line {}", i + 1)),
+                                                            false => {
+                                                                code.push_str("PRINT");
+                                                                code.push(' ');
+                                                                code.push_str(arg);
+                                                                code.push('\n');
+                                                            }
                                                         }
                                                         None => return Err(format!("Expected label at line {}", i + 1))
                                                     }
                                                     2 => match tokens.next() {
-                                                        Some(arg) => {
-                                                            code.push_str("READ");
-                                                            code.push(' ');
-                                                            code.push_str(arg);
-                                                            code.push('\n');
+                                                        Some(arg) => match arg.starts_with("//") {
+                                                            true => return Err(format!("Expected label at line {}", i + 1)),
+                                                            false => {
+                                                                code.push_str("READ");
+                                                                code.push(' ');
+                                                                code.push_str(arg);
+                                                                code.push('\n');
+                                                            }
                                                         }
                                                         None => return Err(format!("Expected label at line {}", i + 1))
                                                     }
                                                     3 => match tokens.next() {
-                                                        Some(arg) => {
-                                                            code.push_str("SET");
-                                                            code.push(' ');
-                                                            code.push_str(arg);
-                                                            code.push('\n');
+                                                        Some(arg) => match arg.starts_with("//") {
+                                                            true => return Err(format!("Expected label at line {}", i + 1)),
+                                                            false => {
+                                                                code.push_str("SET");
+                                                                code.push(' ');
+                                                                code.push_str(arg);
+                                                                code.push('\n');
+                                                            }
                                                         }
                                                         None => return Err(format!("Expected label at line {}", i + 1))
                                                     }
@@ -143,11 +152,14 @@ pub fn assemble(in_asm: &str, breadcrumb: Option<&str>) -> Result<(), String> {
                                             None => return Err(format!("Expected integer at line {}", i + 1))
                                         },
                                         _ => match tokens.next() {
-                                            Some(arg) => {
-                                                code.push_str(token);
-                                                code.push(' ');
-                                                code.push_str(arg);
-                                                code.push('\n');
+                                            Some(arg) => match arg.starts_with("//") {
+                                                true => return Err(format!("Expected label at line {}", i + 1)),
+                                                false => {
+                                                    code.push_str(token);
+                                                    code.push(' ');
+                                                    code.push_str(arg);
+                                                    code.push('\n');
+                                                }
                                             }
                                             None => return Err(format!("Expected label at line {}", i + 1)),
                                         }
@@ -184,20 +196,26 @@ pub fn assemble(in_asm: &str, breadcrumb: Option<&str>) -> Result<(), String> {
                                                 }
                                             }
                                             PseudoOps::PRINT => match tokens.next() {
-                                                Some(arg) => {
-                                                    code.push_str(token);
-                                                    code.push(' ');
-                                                    code.push_str(arg);
-                                                    code.push('\n');
+                                                Some(arg) => match arg.starts_with("//") {
+                                                    true => return Err(format!("Expected label at line {}", i + 1)),
+                                                    false => {
+                                                        code.push_str(token);
+                                                        code.push(' ');
+                                                        code.push_str(arg);
+                                                        code.push('\n');
+                                                    }
                                                 }
                                                 None => return Err(format!("Expected label at line {}", i + 1)),
                                             }
                                             PseudoOps::READ => match tokens.next() {
-                                                Some(arg) => {
-                                                    code.push_str(token);
-                                                    code.push(' ');
-                                                    code.push_str(arg);
-                                                    code.push('\n');
+                                                Some(arg) => match arg.starts_with("//") {
+                                                    true => return Err(format!("Expected label at line {}", i + 1)),
+                                                    false => {
+                                                        code.push_str(token);
+                                                        code.push(' ');
+                                                        code.push_str(arg);
+                                                        code.push('\n');
+                                                    }
                                                 }
                                                 None => return Err(format!("Expected label at line {}", i + 1)),
                                             }
@@ -233,6 +251,10 @@ pub fn assemble(in_asm: &str, breadcrumb: Option<&str>) -> Result<(), String> {
                                         while let Some(token) = tokens.next() {
                                             words.push_str(token);
 
+                                            if token.starts_with("//") {
+                                                return Err(format!("Expected arguments at line {}", i + 1));
+                                            }
+
                                             if !token.ends_with(',') {
                                                 break;
                                             }
@@ -246,9 +268,15 @@ pub fn assemble(in_asm: &str, breadcrumb: Option<&str>) -> Result<(), String> {
                                     }
                                     ".text" => {
                                         texts.push_str(token);
-                                        texts.push_str(
-                                            &tokens.take_while(|tok| !tok.starts_with("//")).fold(String::new(), |acc, tok| acc + " " + tok),
-                                        );
+                                        match tokens.next() {
+                                            Some(token) => match token.starts_with("//") {
+                                                true => return Err(format!("Expected arguments after directive at line {}", i + 1)),
+                                                false => texts.push_str(token),
+                                            }
+                                            None => return Err(format!("Expected arguments after directive at line {}", i + 1))
+                                        }
+                                        let args = tokens.take_while(|tok| !tok.starts_with("//")).fold(String::new(), |acc, tok| acc + " " + tok);
+                                        texts.push_str(args.as_str());
                                         texts.push('\n');
                                     }
                                     _ => {
@@ -274,7 +302,10 @@ pub fn assemble(in_asm: &str, breadcrumb: Option<&str>) -> Result<(), String> {
                                     began = true;
                                 }
                                 PseudoOps::EXTERN => match tokens.next() {
-                                    Some(l) => ext.push_str(l),
+                                    Some(l) => match l.starts_with("//") {
+                                        true => return Err(format!("Expected label at line {}", i + 1)),
+                                        false => ext.push_str(l),
+                                    }
                                     None => {
                                         return Err(format!(
                                             "Expected label after EXTERN at line {}",
@@ -311,17 +342,17 @@ pub fn assemble(in_asm: &str, breadcrumb: Option<&str>) -> Result<(), String> {
         breadcrumb.unwrap_or("a.bdc"),
         words.lines().count().to_string()
             + " "
-            + &texts.lines().count().to_string()
+            + texts.lines().count().to_string().as_str()
             + " "
-            + &labels.lines().count().to_string()
+            + labels.lines().count().to_string().as_str()
             + " "
-            + &ext.lines().count().to_string()
+            + ext.lines().count().to_string().as_str()
             + "\n"
-            + &words
-            + &texts
-            + &labels
-            + &ext
-            + &code,
+            + words.as_str()
+            + texts.as_str()
+            + labels.as_str()
+            + ext.as_str()
+            + code.as_str(),
     ) {
         Ok(_) => Ok(()),
         Err(why) => Err(why.to_string()),
