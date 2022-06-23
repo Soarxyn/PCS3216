@@ -42,10 +42,10 @@ pub enum PseudoOps {
     HALT,
     PRINT,
     READ,
-    BEGIN,
-    END,
     SET,
     CLEAR,
+    BEGIN,
+    END,
     EXTERN,
 }
 
@@ -55,7 +55,7 @@ pub fn assemble(in_asm: &str, breadcrumb: Option<&str>) -> Result<(), String> {
         Err(why) => return Err(why.to_string()),
     };
 
-    let mut words = String::new();
+    let mut word_labels = String::new();
     let mut texts = String::new();
     let mut ext = String::new();
     let mut labels = String::new();
@@ -66,269 +66,272 @@ pub fn assemble(in_asm: &str, breadcrumb: Option<&str>) -> Result<(), String> {
     let mut offset = 0;
 
     s.lines().enumerate().try_for_each(|(i, line)| {
-        let mut tokens = line.split_whitespace();
-        if let Some(token) = tokens.next() {
-            if !token.starts_with("//") {
-                match began {
-                    true => {
-                        if ended {
-                            return Err("File continues after END".to_owned());
-                        }
-                        match token.ends_with(':') {
-                            true => {
-                                if let Some(token) = tokens.next() {
-                                    if !token.starts_with("//") {
-                                        return Err(format!(
-                                            "Found instruction after label at line {}",
-                                            i + 1
-                                        ));
+        let line = match line.split_once("//") {
+            Some((code, _comment)) => code.trim(),
+            None => line.trim()
+        };
+
+        if !line.is_empty() && began && ended {
+            return Err("File continues after END".to_owned());
+        } else if let Some((label, words)) = line.split_once(".word") {
+            if began {
+                return Err(format!("Found .word directive after BEGIN statement at line {}", i + 1));
+            }
+
+            let label = label.trim_end();
+            match label.ends_with(':') {
+                false => return Err(format!("Expected label before .word directive at line {}", i + 1)),
+                true => match label.trim_end_matches(':').trim_end().chars().any(|c| c.is_whitespace()) {
+                    true => return Err(format!("Parsing error at line {}", i + 1)),
+                    false => if word_labels.lines().any(|line| line.starts_with(label))
+                        || texts.lines().any(|line| line.starts_with(label))
+                        || ext.lines().any(|line| line.starts_with(label)) {
+
+                        return Err(format!("Label {} found at line {} previously defined", label, i + 1));
+                    }
+                }
+            }
+
+            if words.split(',').any(|word| word.trim().parse::<u32>().is_err()) {
+                return Err(format!("Unexpected character at line {}", i + 1));
+            }
+
+            word_labels.extend(label.chars().filter(|c| !c.is_whitespace()));
+            word_labels.extend(words.chars().filter(|c| !c.is_whitespace()));
+            word_labels.push('\n');
+        } else if let Some((label, text)) = line.split_once(".text") {
+            if began {
+                return Err(format!("Found .text directive after BEGIN statement at line {}", i + 1));
+            }
+
+            let label = label.trim_end();
+            match label.ends_with(':') {
+                false => return Err(format!("Expected label before .text directive at line {}", i + 1)),
+                true => match label.trim_end_matches(':').trim_end().chars().any(|c| c.is_whitespace()) {
+                    true => return Err(format!("Parsing error at line {}", i + 1)),
+                    false => if word_labels.lines().any(|line| line.starts_with(label))
+                        || texts.lines().any(|line| line.starts_with(label))
+                        || ext.lines().any(|line| line.starts_with(label)) {
+
+                        return Err(format!("Label {} found at line {} previously defined", label, i + 1));
+                    }
+                }
+            }
+
+            texts.extend(label.chars().filter(|c| !c.is_whitespace()));
+            texts.push_str(text.trim_start());
+            texts.push('\n');
+        } else if let Some((label, text)) = line.split_once(':') {
+            if !began {
+                return Err(format!("Expected directive after label at line {}", i + 1));
+            }
+
+            let label = label.trim_end();
+            match label.chars().any(|c| c.is_whitespace()) {
+                true => return Err(format!("Parsing error at line {}", i + 1)),
+                false => if word_labels.lines().any(|line| line.starts_with(label))
+                    || texts.lines().any(|line| line.starts_with(label))
+                    || ext.lines().any(|line| line.starts_with(label))
+                    || labels.lines().any(|line| line.starts_with(label)) {
+
+                    return Err(format!("Label {} found at line {} previously defined", label, i + 1));
+                }
+            }
+
+            labels.extend(label.chars().filter(|c| !c.is_whitespace()));
+            labels.push(':');
+            labels.push_str((i - offset).to_string().as_str());
+            labels.push('\n');
+
+            let mut tokens = text.split_whitespace();
+            match tokens.next() {
+                None => offset += 1,
+                Some(token) => {
+                    if let Ok(op) = OpCodes::from_str(token) {
+                        match op {
+                            OpCodes::IRQ => match tokens.next() {
+                                None => return Err(format!("Expected integer at line {}", i + 1)),
+
+                                Some(irq_type) => match irq_type.parse::<u8>() {
+                                    Err(_) => return Err(format!("Expected integer at line {}\n\tfound {} instead", i + 1, irq_type)),
+
+                                    Ok(v) => match tokens.next() {
+                                        Some(arg) => {
+                                            code.push_str(match v {
+                                                1 => "PRINT ",
+                                                2 => "READ ",
+                                                3 => "SET ",
+                                                _ => return Err(format!("IRQ parsing error at line {}", i + 1)),
+                                            });
+                                            code.push_str(arg);
+                                            code.push('\n');
+                                        }
+                                        None => code.push_str(match v {
+                                            0 => "HALT\n",
+                                            4 => "CLEAR\n",
+                                            _ => return Err(format!("IRQ parsing error at line {}", i + 1)),
+                                        }),
                                     }
                                 }
-                                if ext.contains(token) {
-                                    return Err(format!(
-                                        "EXTERN label already defined in file at line {}",
-                                        i + 1
-                                    ));
-                                }
-                                labels.push_str(token);
-                                labels.push_str((i - offset).to_string().as_str());
-                                labels.push('\n');
-                                offset += 1;
                             }
-                            false => {
-                                match OpCodes::from_str(token) {
-                                    Ok(op) => match op {
-                                        OpCodes::IRQ => match tokens.next() {
-                                            Some(irq_type) => match irq_type.parse::<u8>() {
-                                                Ok(v) => match v {
-                                                    0 => {
-                                                        code.push_str("HALT");
-                                                        code.push('\n');
-                                                    }
-                                                    1 => match tokens.next() {
-                                                        Some(arg) => match arg.starts_with("//") {
-                                                            true => return Err(format!("Expected label at line {}", i + 1)),
-                                                            false => {
-                                                                code.push_str("PRINT");
-                                                                code.push(' ');
-                                                                code.push_str(arg);
-                                                                code.push('\n');
-                                                            }
-                                                        }
-                                                        None => return Err(format!("Expected label at line {}", i + 1))
-                                                    }
-                                                    2 => match tokens.next() {
-                                                        Some(arg) => match arg.starts_with("//") {
-                                                            true => return Err(format!("Expected label at line {}", i + 1)),
-                                                            false => {
-                                                                code.push_str("READ");
-                                                                code.push(' ');
-                                                                code.push_str(arg);
-                                                                code.push('\n');
-                                                            }
-                                                        }
-                                                        None => return Err(format!("Expected label at line {}", i + 1))
-                                                    }
-                                                    3 => match tokens.next() {
-                                                        Some(arg) => match arg.starts_with("//") {
-                                                            true => return Err(format!("Expected label at line {}", i + 1)),
-                                                            false => {
-                                                                code.push_str("SET");
-                                                                code.push(' ');
-                                                                code.push_str(arg);
-                                                                code.push('\n');
-                                                            }
-                                                        }
-                                                        None => return Err(format!("Expected label at line {}", i + 1))
-                                                    }
-                                                    4 => {
-                                                        code.push_str("CLEAR");
-                                                        code.push('\n');
-                                                    }
-                                                    _ => return Err(format!("Unknown IRQ type at line {}: {}", i + 1, v)),
-                                                },
-                                                Err(_) => return Err(format!("Expected integer at line {}\n\tfound {} instead", i + 1, irq_type))
-                                            },
-                                            None => return Err(format!("Expected integer at line {}", i + 1))
-                                        },
-                                        _ => match tokens.next() {
-                                            Some(arg) => match arg.starts_with("//") {
-                                                true => return Err(format!("Expected label at line {}", i + 1)),
-                                                false => {
-                                                    code.push_str(token);
-                                                    code.push(' ');
-                                                    code.push_str(arg);
-                                                    code.push('\n');
-                                                }
-                                            }
-                                            None => return Err(format!("Expected label at line {}", i + 1)),
+                            _ => match tokens.next() {
+                                None => return Err(format!("Expected label at line {}", i + 1)),
+                                Some(arg) => {
+                                    code.push_str(token);
+                                    code.push(' ');
+                                    code.push_str(arg);
+                                    code.push('\n');
+                                }
+                            }
+                        }
+                    } else {
+                        match PseudoOps::from_str(token) {
+                            Err(_) => return Err(format!( "Expected instruction at line {}\t\nfound {} instead", i + 1, token)),
+
+                            Ok(psop) => match psop {
+                                PseudoOps::EXTERN => return Err(format!("Found EXTERN statement after BEGIN at line {}", i + 1)),
+
+                                PseudoOps::BEGIN => return Err("BEGIN statement already used".to_owned()),
+
+                                PseudoOps::END => ended = true,
+
+                                PseudoOps::SET => match tokens.next() {
+                                    None => return Err(format!( "Expected label at line {}", i + 1)),
+
+                                    Some(arg) => match u32::from_str_radix(arg, 2) {
+                                        Err(_) => return Err(format!("Expected binary number as argument at line {}\n\tfound {} instead", i + 1, token)),
+
+                                        Ok(_) => {
+                                            code.push_str(token);
+                                            code.push(' ');
+                                            code.push_str(arg);
+                                            code.push('\n');
                                         }
-                                    },
-                                    Err(_) => match PseudoOps::from_str(token) {
-                                        Ok(psop) => match psop {
-                                            PseudoOps::EXTERN => {
-                                                return Err(format!(
-                                                    "Found EXTERN statement after BEGIN at line {}",
-                                                    i + 1
-                                                ))
-                                            },
-                                            PseudoOps::BEGIN => {
-                                                return Err("BEGIN statement already used".to_owned())
-                                            }
-                                            PseudoOps::END => ended = true,
-                                            PseudoOps::SET => {
-                                                match tokens.next() {
-                                                    Some(arg) => match u32::from_str_radix(token, 2) {
-                                                        Ok(_) => {
-                                                            code.push_str(token);
-                                                            code.push(' ');
-                                                            code.push_str(arg);
-                                                            code.push('\n');
-                                                        }
-                                                        Err(_) => return Err(format!("Expected binary number as argument at line {}\n\tfound {} instead", i + 1, token))
-                                                    }
-                                                    None => {
-                                                        return Err(format!(
-                                                            "Expected label at line {}",
-                                                            i + 1
-                                                        ))
-                                                    }
-                                                }
-                                            }
-                                            PseudoOps::PRINT => match tokens.next() {
-                                                Some(arg) => match arg.starts_with("//") {
-                                                    true => return Err(format!("Expected label at line {}", i + 1)),
-                                                    false => {
-                                                        code.push_str(token);
-                                                        code.push(' ');
-                                                        code.push_str(arg);
-                                                        code.push('\n');
-                                                    }
-                                                }
-                                                None => return Err(format!("Expected label at line {}", i + 1)),
-                                            }
-                                            PseudoOps::READ => match tokens.next() {
-                                                Some(arg) => match arg.starts_with("//") {
-                                                    true => return Err(format!("Expected label at line {}", i + 1)),
-                                                    false => {
-                                                        code.push_str(token);
-                                                        code.push(' ');
-                                                        code.push_str(arg);
-                                                        code.push('\n');
-                                                    }
-                                                }
-                                                None => return Err(format!("Expected label at line {}", i + 1)),
-                                            }
-                                            _ => {
-                                                code.push_str(token);
-                                                code.push('\n');
-                                            }
-                                        },
-                                        Err(_) => {
-                                            return Err(format!(
-                                                "Expected instruction at line {}\t\nfound {} instead",
-                                                i + 1,
-                                                token
-                                            ))
-                                        }
-                                    },
+                                    }
+                                }
+                                PseudoOps::PRINT | PseudoOps::READ => match tokens.next() {
+                                    None => return Err(format!("Expected label at line {}", i + 1)),
+
+                                    Some(arg) => {
+                                        code.push_str(token);
+                                        code.push(' ');
+                                        code.push_str(arg);
+                                        code.push('\n');
+                                    }
+                                }
+                                _ => {
+                                    code.push_str(token);
+                                    code.push('\n');
                                 }
                             }
                         }
                     }
-                    false => match token.ends_with(':') {
-                        true => {
-                            if ext.contains(token) {
-                                return Err(format!(
-                                    "EXTERN label already defined in file at line {}",
-                                    i + 1
-                                ));
-                            }
-                            match tokens.next() {
-                                Some(direc) => match direc {
-                                    ".word" => {
-                                        words.push_str(token);
-                                        while let Some(token) = tokens.next() {
-                                            words.push_str(token);
+                }
+            }
+            if let Some(token) = tokens.next() {
+                return Err(format!("Unexpected argument at line {}\n\t{}", i + 1, token));
+            }
+        } else {
+            let mut tokens = line.split_whitespace();
+            if let Some(token) = tokens.next() {
+                if let Ok(op) = OpCodes::from_str(token) {
+                    if !began {
+                        return Err(format!("Found instruction before BEGIN statement at line {}", i + 1));
+                    }
+                    match op {
+                        OpCodes::IRQ => match tokens.next() {
+                            None => return Err(format!("Expected IRQ type at line {}", i + 1)),
 
-                                            if token.starts_with("//") {
-                                                return Err(format!("Expected arguments at line {}", i + 1));
-                                            }
+                            Some(irq_type) => match irq_type.parse::<u8>() {
+                                Err(_) => return Err(format!("Expected IRQ type at line {}\n\tfound {} instead", i + 1, irq_type)),
 
-                                            if !token.ends_with(',') {
-                                                break;
-                                            }
-                                        }
-                                        if let Some(token) = tokens.next() {
-                                            if !token.starts_with("//") {
-                                                return Err(format!("Expected comma at line {}", i + 1));
-                                            }
-                                        }
-                                        words.push('\n');
+                                Ok(v) => match tokens.next() {
+                                    Some(arg) => {
+                                        code.push_str(match v {
+                                            1 => "PRINT ",
+                                            2 => "READ ",
+                                            3 => "SET ",
+                                            0 | 4 => return Err(format!("Unexpected argument at line {}\n\t{}", i + 1, arg)),
+                                            _ => return Err(format!("Unknown IRQ type at line {}\n\t{}", i + 1, irq_type)),
+                                        });
+                                        code.push_str(arg);
+                                        code.push('\n');
                                     }
-                                    ".text" => {
-                                        texts.push_str(token);
-                                        match tokens.next() {
-                                            Some(token) => match token.starts_with("//") {
-                                                true => return Err(format!("Expected arguments after directive at line {}", i + 1)),
-                                                false => texts.push_str(token),
-                                            }
-                                            None => return Err(format!("Expected arguments after directive at line {}", i + 1))
-                                        }
-                                        let args = tokens.take_while(|tok| !tok.starts_with("//")).fold(String::new(), |acc, tok| acc + " " + tok);
-                                        texts.push_str(args.as_str());
-                                        texts.push('\n');
-                                    }
-                                    _ => {
-                                        return Err(format!(
-                                        "Expected directive after label at line {}\n\tfound {} instead",
-                                        i + 1,
-                                        token
-                                    ))
-                                    }
-                                },
-                                None => {
-                                    return Err(format!(
-                                        "Expected directive after label at line {}",
-                                        i + 1
-                                    ))
+                                    None => code.push_str(match v {
+                                        0 => "HALT\n",
+                                        4 => "CLEAR\n",
+                                        1..=3 => return Err(format!("Expected argument at line {}", i + 1)),
+                                        _ => return Err(format!("Unknown IRQ type at line {}\n\t{}", i + 1, irq_type)),
+                                    }),
                                 }
                             }
                         }
-                        false => match PseudoOps::from_str(token) {
-                            Ok(psop) => match psop {
+                        _ => match tokens.next() {
+                            None => return Err(format!("Expected label at line {}", i + 1)),
+
+                            Some(arg) => {
+                                code.push_str(token);
+                                code.push(' ');
+                                code.push_str(arg);
+                                code.push('\n');
+                            }
+                        }
+                    }
+                } else {
+                    match PseudoOps::from_str(token) {
+                        Err(_) => return Err(format!( "Expected label or instruction at line {}\t\nfound {} instead", i + 1, token)),
+
+                        Ok(psop) => match began {
+                            true => match psop {
+                                PseudoOps::EXTERN => return Err(format!("Found EXTERN statement after BEGIN at line {}", i + 1)),
+
+                                PseudoOps::BEGIN => return Err("BEGIN statement already used".to_owned()),
+
+                                PseudoOps::END => ended = true,
+
+                                PseudoOps::SET => match tokens.next() {
+                                    None => return Err(format!( "Expected label at line {}", i + 1)),
+
+                                    Some(arg) => match u32::from_str_radix(arg, 2) {
+                                        Err(_) => return Err(format!("Expected binary number as argument at line {}\n\tfound {} instead", i + 1, token)),
+
+                                        Ok(_) => {
+                                            code.push_str(token);
+                                            code.push(' ');
+                                            code.push_str(arg);
+                                            code.push('\n');
+                                        }
+                                    }
+                                }
+                                PseudoOps::PRINT | PseudoOps::READ => match tokens.next() {
+                                    None => return Err(format!("Expected label at line {}", i + 1)),
+
+                                    Some(arg) => {
+                                        code.push_str(token);
+                                        code.push(' ');
+                                        code.push_str(arg);
+                                        code.push('\n');
+                                    }
+                                }
+                                _ => {
+                                    code.push_str(token);
+                                    code.push('\n');
+                                }
+                            }
+                            false => match psop {
                                 PseudoOps::BEGIN => {
-                                    offset = words.lines().count() + texts.lines().count() + ext.lines().count() + 1;
+                                    offset = word_labels.lines().count() + texts.lines().count() + ext.lines().count() + 1;
                                     began = true;
                                 }
                                 PseudoOps::EXTERN => match tokens.next() {
-                                    Some(l) => match l.starts_with("//") {
-                                        true => return Err(format!("Expected label at line {}", i + 1)),
-                                        false => ext.push_str(l),
-                                    }
-                                    None => {
-                                        return Err(format!(
-                                            "Expected label after EXTERN at line {}",
-                                            i + 1
-                                        ))
-                                    }
-                                },
-                                _ => {
-                                    return Err(format!(
-                                    "Expected BEGIN or EXTERN statement or label at line {}\n\tfound {} instead",
-                                    i + 1, token
-                                ))
+                                    None => return Err(format!("Expected label after EXTERN at line {}", i + 1)),
+
+                                    Some(l) => ext.push_str(l),
                                 }
-                            },
-                            Err(_) => {
-                                return Err(format!(
-                                    "Expected BEGIN or EXTERN statement or label at line {}\n\tfound {} instead",
-                                    i + 1,
-                                    token
-                                ))
+                                _ => return Err(format!("Expected BEGIN or EXTERN statement or label at line {}\n\tfound {} instead", i + 1, token))
                             }
-                        },
-                    },
+                        }
+                    }
                 }
             }
         }
@@ -338,9 +341,10 @@ pub fn assemble(in_asm: &str, breadcrumb: Option<&str>) -> Result<(), String> {
     if !ended {
         return Err("END statement missing".to_owned());
     }
+
     match fs::write(
         breadcrumb.unwrap_or("a.bdc"),
-        words.lines().count().to_string()
+        word_labels.lines().count().to_string()
             + " "
             + texts.lines().count().to_string().as_str()
             + " "
@@ -348,7 +352,7 @@ pub fn assemble(in_asm: &str, breadcrumb: Option<&str>) -> Result<(), String> {
             + " "
             + ext.lines().count().to_string().as_str()
             + "\n"
-            + words.as_str()
+            + word_labels.as_str()
             + texts.as_str()
             + labels.as_str()
             + ext.as_str()
