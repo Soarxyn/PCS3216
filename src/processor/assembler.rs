@@ -1,7 +1,7 @@
 use std::{fs, str::FromStr};
 
 #[repr(u8)]
-#[derive(EnumString)]
+#[derive(EnumString, FromRepr, Debug)]
 pub enum OpCodes {
     IRQ,
     LDA,
@@ -37,7 +37,8 @@ pub enum OpCodes {
     RCR,
 }
 
-#[derive(EnumString, PartialEq)]
+#[repr(u8)]
+#[derive(EnumString, PartialEq, FromRepr)]
 pub enum PseudoOps {
     HALT,
     PRINT,
@@ -55,14 +56,13 @@ pub fn assemble(in_asm: &str, breadcrumb: Option<&str>) -> Result<(), String> {
         Err(why) => return Err(why.to_string()),
     };
 
-    let mut word_labels = String::new();
-    let mut texts = String::new();
-    let mut ext = String::new();
-    let mut labels = String::new();
-    let mut code = String::new();
+    let mut buf = String::with_capacity(s.len());
+    buf.push('\n');
 
     let mut began = false;
     let mut ended = false;
+
+    let mut header_len = 1;
     let mut offset = 0;
 
     s.lines().enumerate().try_for_each(|(i, line)| {
@@ -71,83 +71,188 @@ pub fn assemble(in_asm: &str, breadcrumb: Option<&str>) -> Result<(), String> {
             None => line.trim()
         };
 
-        if !line.is_empty() && began && ended {
-            return Err("File continues after END".to_owned());
-        } else if let Some((label, words)) = line.split_once(".word") {
-            if began {
-                return Err(format!("Found .word directive after BEGIN statement at line {}", i + 1));
-            }
+        if !line.is_empty() {
+            if ended {
+                return Err("File continues after END".to_owned());
+            } else if let Some((label, words)) = line.split_once(".word") {
+                if began {
+                    return Err(format!("Found .word directive after BEGIN statement at line {}", i + 1));
+                }
 
-            let label = label.trim_end();
-            match label.ends_with(':') {
-                false => return Err(format!("Expected label before .word directive at line {}", i + 1)),
-                true => match label.trim_end_matches(':').trim_end().chars().any(|c| c.is_whitespace()) {
-                    true => return Err(format!("Parsing error at line {}", i + 1)),
-                    false => if word_labels.lines().any(|line| line.starts_with(label))
-                        || texts.lines().any(|line| line.starts_with(label))
-                        || ext.lines().any(|line| line.starts_with(label)) {
+                let label = label.trim_end();
+                match label.strip_suffix(':') {
+                    None => return Err(format!("Expected label before .word directive at line {}", i + 1)),
 
+                    Some(label) => match label.trim_end().chars().any(|c| c.is_whitespace()) {
+                        true => return Err(format!("Found whitespace in label at line {}\n\t{}", i + 1, label)),
+
+                        false => if buf.lines().take(header_len).any(|line| line.starts_with(label)) {
+                            return Err(format!("Found label redefinition at line {}\n\t{}", i + 1, label));
+                        }
+                    }
+                }
+
+                match words.starts_with(|c: char| c.is_whitespace()) {
+                    false => return Err(format!("Expected whitespace after .word directive at line {}", i + 1)),
+
+                    true => words.split(',').try_for_each(|word| match word.trim().parse::<u32>() {
+                        Err(_) => Err(format!("Couldn't parse word at line {}\n\t{}", i + 1, word)),
+                        Ok(_) => Ok(()),
+                    })?,
+                }
+
+                buf.extend(label.chars().chain(words.chars()).filter(|c| !c.is_whitespace()));
+                buf.push('\n');
+                header_len += 1;
+            } else if let Some((label, text)) = line.split_once(".text") {
+                if began {
+                    return Err(format!("Found .text directive after BEGIN statement at line {}", i + 1));
+                }
+
+                let label = label.trim_end();
+                match label.strip_suffix(':') {
+                    None => return Err(format!("Expected label before .text directive at line {}", i + 1)),
+
+                    Some(label) => match label.trim_end().chars().any(|c| c.is_whitespace()) {
+                        true => return Err(format!("Found whitespace in label at line {}\n\t{}", i + 1, label)),
+
+                        false => if buf.lines().take(header_len).any(|line| line.starts_with(label)) {
+                            return Err(format!("Found label redefinition at line {}\n\t{}", i + 1, label));
+                        }
+                    }
+                }
+
+                let text = match text.strip_prefix(|c: char| c.is_whitespace()) {
+                    None => return Err(format!("Expected whitespace after .text directive at line {}", i + 1)),
+
+                    Some(text) => text,
+                };
+
+                buf.extend(label.chars().filter(|c| !c.is_whitespace()));
+                buf.push_str(text);
+                buf.push_str("\"\n");
+                header_len += 1;
+            } else if let Some((label, text)) = line.split_once(':') {
+                if !began {
+                    return Err(format!("Expected directive after label at line {}", i + 1));
+                }
+
+                let label = label.trim_end();
+                match label.chars().any(|c| c.is_whitespace()) {
+                    true => return Err(format!("Found whitespace in label at line {}\n\t{}", i + 1, label)),
+
+                    false => if buf.lines().take(header_len).any(|line| line.starts_with(label)) {
                         return Err(format!("Label {} found at line {} previously defined", label, i + 1));
                     }
                 }
-            }
 
-            if words.split(',').any(|word| word.trim().parse::<u32>().is_err()) {
-                return Err(format!("Unexpected character at line {}", i + 1));
-            }
+                let string = label.to_owned() + " " + (i - offset).to_string().as_str() + "\n";
 
-            word_labels.extend(label.chars().filter(|c| !c.is_whitespace()));
-            word_labels.extend(words.chars().filter(|c| !c.is_whitespace()));
-            word_labels.push('\n');
-        } else if let Some((label, text)) = line.split_once(".text") {
-            if began {
-                return Err(format!("Found .text directive after BEGIN statement at line {}", i + 1));
-            }
+                buf.insert_str(buf.lines().take(header_len).map(|line| line.bytes().count() + 1).reduce(|acc, n| acc + n).unwrap_or(0), string.as_str());
+                header_len += 1;
 
-            let label = label.trim_end();
-            match label.ends_with(':') {
-                false => return Err(format!("Expected label before .text directive at line {}", i + 1)),
-                true => match label.trim_end_matches(':').trim_end().chars().any(|c| c.is_whitespace()) {
-                    true => return Err(format!("Parsing error at line {}", i + 1)),
-                    false => if word_labels.lines().any(|line| line.starts_with(label))
-                        || texts.lines().any(|line| line.starts_with(label))
-                        || ext.lines().any(|line| line.starts_with(label)) {
+                let mut tokens = text.split_whitespace();
+                match tokens.next() {
+                    None => offset += 1,
+                    Some(token) => {
+                        if let Ok(op) = OpCodes::from_str(token) {
+                            match op {
+                                OpCodes::IRQ => match tokens.next() {
+                                    None => return Err(format!("Expected integer at line {}", i + 1)),
 
-                        return Err(format!("Label {} found at line {} previously defined", label, i + 1));
+                                    Some(irq_type) => match irq_type.parse::<u8>() {
+                                        Err(_) => return Err(format!("Expected integer at line {}\n\tfound {} instead", i + 1, irq_type)),
+
+                                        Ok(v) => match tokens.next() {
+                                            Some(arg) => match v {
+                                                1..=3 => {
+                                                    buf.push_str("IRQ ");
+                                                    buf.push_str(irq_type);
+                                                    buf.push(' ');
+                                                    buf.push_str(arg);
+                                                    buf.push('\n');
+                                                }
+                                                0 | 4 => return Err(format!("Unexpected argument at line {}\n\t{}", i + 1, token)),
+                                                _ => return Err(format!("Unknown IRQ type at line {}\n\t{}", i + 1, irq_type)),
+                                            }
+                                            None => match v {
+                                                0 | 4 => {
+                                                    buf.push_str("IRQ ");
+                                                    buf.push_str(irq_type);
+                                                    buf.push('\n');
+                                                }
+                                                1..=3 => return Err(format!("Expected label at line {}", i + 1)),
+                                                _ => return Err(format!("Unknown IRQ type at line {}\n\t{}", i + 1, irq_type)),
+                                            }
+                                        }
+                                    }
+                                }
+                                _ => match tokens.next() {
+                                    None => return Err(format!("Expected label at line {}", i + 1)),
+
+                                    Some(arg) => {
+                                        buf.push_str(token);
+                                        buf.push(' ');
+                                        buf.push_str(arg);
+                                        buf.push('\n');
+                                    }
+                                }
+                            }
+                        } else {
+                            match PseudoOps::from_str(token) {
+                                Err(_) => return Err(format!("Expected instruction at line {}\t\nfound {} instead", i + 1, token)),
+
+                                Ok(psop) => match psop {
+                                    PseudoOps::EXTERN => return Err(format!("Found EXTERN statement after BEGIN at line {}", i + 1)),
+
+                                    PseudoOps::BEGIN => return Err(format!("Found repeated BEGIN statement at line {}", i + 1)),
+
+                                    PseudoOps::END => ended = true,
+
+                                    PseudoOps::SET => match tokens.next() {
+                                        None => return Err(format!("Expected label at line {}", i + 1)),
+
+                                        Some(arg) => match u32::from_str_radix(arg, 2) {
+                                            Err(_) => return Err(format!("Expected binary number as argument at line {}\n\tfound {} instead", i + 1, token)),
+
+                                            Ok(_) => {
+                                                buf.push_str("IRQ 3 ");
+                                                buf.push_str(arg);
+                                                buf.push('\n');
+                                            }
+                                        }
+                                    }
+                                    PseudoOps::PRINT | PseudoOps::READ => match tokens.next() {
+                                        None => return Err(format!("Expected label at line {}", i + 1)),
+
+                                        Some(arg) => {
+                                            buf.push_str("IRQ ");
+                                            buf.push_str((psop as u8).to_string().as_str());
+                                            buf.push(' ');
+                                            buf.push_str(arg);
+                                            buf.push('\n');
+                                        }
+                                    }
+                                    _ => {
+                                        buf.push_str("IRQ ");
+                                        buf.push_str((psop as u8).to_string().as_str());
+                                        buf.push('\n');
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
-            }
-
-            texts.extend(label.chars().filter(|c| !c.is_whitespace()));
-            texts.push_str(text.trim_start());
-            texts.push('\n');
-        } else if let Some((label, text)) = line.split_once(':') {
-            if !began {
-                return Err(format!("Expected directive after label at line {}", i + 1));
-            }
-
-            let label = label.trim_end();
-            match label.chars().any(|c| c.is_whitespace()) {
-                true => return Err(format!("Parsing error at line {}", i + 1)),
-                false => if word_labels.lines().any(|line| line.starts_with(label))
-                    || texts.lines().any(|line| line.starts_with(label))
-                    || ext.lines().any(|line| line.starts_with(label))
-                    || labels.lines().any(|line| line.starts_with(label)) {
-
-                    return Err(format!("Label {} found at line {} previously defined", label, i + 1));
+                if let Some(token) = tokens.next() {
+                    return Err(format!("Unexpected argument at line {}\n\t{}", i + 1, token));
                 }
-            }
-
-            labels.extend(label.chars().filter(|c| !c.is_whitespace()));
-            labels.push(':');
-            labels.push_str((i - offset).to_string().as_str());
-            labels.push('\n');
-
-            let mut tokens = text.split_whitespace();
-            match tokens.next() {
-                None => offset += 1,
-                Some(token) => {
+            } else {
+                let mut tokens = line.split_whitespace();
+                if let Some(token) = tokens.next() {
                     if let Ok(op) = OpCodes::from_str(token) {
+                        if !began {
+                            return Err(format!("Found instruction before BEGIN statement at line {}", i + 1));
+                        }
                         match op {
                             OpCodes::IRQ => match tokens.next() {
                                 None => return Err(format!("Expected integer at line {}", i + 1)),
@@ -156,179 +261,94 @@ pub fn assemble(in_asm: &str, breadcrumb: Option<&str>) -> Result<(), String> {
                                     Err(_) => return Err(format!("Expected integer at line {}\n\tfound {} instead", i + 1, irq_type)),
 
                                     Ok(v) => match tokens.next() {
-                                        Some(arg) => {
-                                            code.push_str(match v {
-                                                1 => "PRINT ",
-                                                2 => "READ ",
-                                                3 => "SET ",
-                                                _ => return Err(format!("IRQ parsing error at line {}", i + 1)),
-                                            });
-                                            code.push_str(arg);
-                                            code.push('\n');
+                                        Some(arg) => match v {
+                                            1..=3 => {
+                                                buf.push_str("IRQ ");
+                                                buf.push_str(irq_type);
+                                                buf.push(' ');
+                                                buf.push_str(arg);
+                                                buf.push('\n');
+                                            }
+                                            0 | 4 => return Err(format!("Unexpected argument at line {}\n\t{}", i + 1, token)),
+                                            _ => return Err(format!("Unknown IRQ type at line {}\n\t{}", i + 1, irq_type)),
                                         }
-                                        None => code.push_str(match v {
-                                            0 => "HALT\n",
-                                            4 => "CLEAR\n",
-                                            _ => return Err(format!("IRQ parsing error at line {}", i + 1)),
-                                        }),
+                                        None => match v {
+                                            0 | 4 => {
+                                                buf.push_str("IRQ ");
+                                                buf.push_str(irq_type);
+                                                buf.push('\n');
+                                            }
+                                            1..=3 => return Err(format!("Expected label at line {}", i + 1)),
+                                            _ => return Err(format!("Unknown IRQ type at line {}\n\t{}", i + 1, irq_type)),
+                                        }
                                     }
                                 }
                             }
                             _ => match tokens.next() {
                                 None => return Err(format!("Expected label at line {}", i + 1)),
+
                                 Some(arg) => {
-                                    code.push_str(token);
-                                    code.push(' ');
-                                    code.push_str(arg);
-                                    code.push('\n');
+                                    buf.push_str(token);
+                                    buf.push(' ');
+                                    buf.push_str(arg);
+                                    buf.push('\n');
                                 }
                             }
                         }
                     } else {
                         match PseudoOps::from_str(token) {
-                            Err(_) => return Err(format!( "Expected instruction at line {}\t\nfound {} instead", i + 1, token)),
+                            Err(_) => return Err(format!("Expected label or instruction at line {}\t\nfound {} instead", i + 1, token)),
 
-                            Ok(psop) => match psop {
-                                PseudoOps::EXTERN => return Err(format!("Found EXTERN statement after BEGIN at line {}", i + 1)),
+                            Ok(psop) => match began {
+                                true => match psop {
+                                    PseudoOps::EXTERN => return Err(format!("Found EXTERN statement after BEGIN at line {}", i + 1)),
 
-                                PseudoOps::BEGIN => return Err("BEGIN statement already used".to_owned()),
+                                    PseudoOps::BEGIN => return Err(format!("Found repeated BEGIN statement at line {}", i + 1)),
 
-                                PseudoOps::END => ended = true,
+                                    PseudoOps::END => ended = true,
 
-                                PseudoOps::SET => match tokens.next() {
-                                    None => return Err(format!( "Expected label at line {}", i + 1)),
+                                    PseudoOps::SET => match tokens.next() {
+                                        None => return Err(format!("Expected label at line {}", i + 1)),
 
-                                    Some(arg) => match u32::from_str_radix(arg, 2) {
-                                        Err(_) => return Err(format!("Expected binary number as argument at line {}\n\tfound {} instead", i + 1, token)),
+                                        Some(arg) => match u32::from_str_radix(arg, 2) {
+                                            Err(_) => return Err(format!("Expected binary number as argument at line {}\n\tfound {} instead", i + 1, token)),
 
-                                        Ok(_) => {
-                                            code.push_str(token);
-                                            code.push(' ');
-                                            code.push_str(arg);
-                                            code.push('\n');
+                                            Ok(_) => {
+                                                buf.push_str("IRQ 3 ");
+                                                buf.push_str(arg);
+                                                buf.push('\n');
+                                            }
                                         }
                                     }
-                                }
-                                PseudoOps::PRINT | PseudoOps::READ => match tokens.next() {
-                                    None => return Err(format!("Expected label at line {}", i + 1)),
+                                    PseudoOps::PRINT | PseudoOps::READ => match tokens.next() {
+                                        None => return Err(format!("Expected label at line {}", i + 1)),
 
-                                    Some(arg) => {
-                                        code.push_str(token);
-                                        code.push(' ');
-                                        code.push_str(arg);
-                                        code.push('\n');
-                                    }
-                                }
-                                _ => {
-                                    code.push_str(token);
-                                    code.push('\n');
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            if let Some(token) = tokens.next() {
-                return Err(format!("Unexpected argument at line {}\n\t{}", i + 1, token));
-            }
-        } else {
-            let mut tokens = line.split_whitespace();
-            if let Some(token) = tokens.next() {
-                if let Ok(op) = OpCodes::from_str(token) {
-                    if !began {
-                        return Err(format!("Found instruction before BEGIN statement at line {}", i + 1));
-                    }
-                    match op {
-                        OpCodes::IRQ => match tokens.next() {
-                            None => return Err(format!("Expected IRQ type at line {}", i + 1)),
-
-                            Some(irq_type) => match irq_type.parse::<u8>() {
-                                Err(_) => return Err(format!("Expected IRQ type at line {}\n\tfound {} instead", i + 1, irq_type)),
-
-                                Ok(v) => match tokens.next() {
-                                    Some(arg) => {
-                                        code.push_str(match v {
-                                            1 => "PRINT ",
-                                            2 => "READ ",
-                                            3 => "SET ",
-                                            0 | 4 => return Err(format!("Unexpected argument at line {}\n\t{}", i + 1, arg)),
-                                            _ => return Err(format!("Unknown IRQ type at line {}\n\t{}", i + 1, irq_type)),
-                                        });
-                                        code.push_str(arg);
-                                        code.push('\n');
-                                    }
-                                    None => code.push_str(match v {
-                                        0 => "HALT\n",
-                                        4 => "CLEAR\n",
-                                        1..=3 => return Err(format!("Expected argument at line {}", i + 1)),
-                                        _ => return Err(format!("Unknown IRQ type at line {}\n\t{}", i + 1, irq_type)),
-                                    }),
-                                }
-                            }
-                        }
-                        _ => match tokens.next() {
-                            None => return Err(format!("Expected label at line {}", i + 1)),
-
-                            Some(arg) => {
-                                code.push_str(token);
-                                code.push(' ');
-                                code.push_str(arg);
-                                code.push('\n');
-                            }
-                        }
-                    }
-                } else {
-                    match PseudoOps::from_str(token) {
-                        Err(_) => return Err(format!( "Expected label or instruction at line {}\t\nfound {} instead", i + 1, token)),
-
-                        Ok(psop) => match began {
-                            true => match psop {
-                                PseudoOps::EXTERN => return Err(format!("Found EXTERN statement after BEGIN at line {}", i + 1)),
-
-                                PseudoOps::BEGIN => return Err("BEGIN statement already used".to_owned()),
-
-                                PseudoOps::END => ended = true,
-
-                                PseudoOps::SET => match tokens.next() {
-                                    None => return Err(format!( "Expected label at line {}", i + 1)),
-
-                                    Some(arg) => match u32::from_str_radix(arg, 2) {
-                                        Err(_) => return Err(format!("Expected binary number as argument at line {}\n\tfound {} instead", i + 1, token)),
-
-                                        Ok(_) => {
-                                            code.push_str(token);
-                                            code.push(' ');
-                                            code.push_str(arg);
-                                            code.push('\n');
+                                        Some(arg) => {
+                                            buf.push_str("IRQ ");
+                                            buf.push_str((psop as u8).to_string().as_str());
+                                            buf.push(' ');
+                                            buf.push_str(arg);
+                                            buf.push('\n');
                                         }
                                     }
-                                }
-                                PseudoOps::PRINT | PseudoOps::READ => match tokens.next() {
-                                    None => return Err(format!("Expected label at line {}", i + 1)),
-
-                                    Some(arg) => {
-                                        code.push_str(token);
-                                        code.push(' ');
-                                        code.push_str(arg);
-                                        code.push('\n');
+                                    _ => {
+                                        buf.push_str("IRQ ");
+                                        buf.push_str((psop as u8).to_string().as_str());
+                                        buf.push('\n');
                                     }
                                 }
-                                _ => {
-                                    code.push_str(token);
-                                    code.push('\n');
-                                }
-                            }
-                            false => match psop {
-                                PseudoOps::BEGIN => {
-                                    offset = word_labels.lines().count() + texts.lines().count() + ext.lines().count() + 1;
-                                    began = true;
-                                }
-                                PseudoOps::EXTERN => match tokens.next() {
-                                    None => return Err(format!("Expected label after EXTERN at line {}", i + 1)),
+                                false => match psop {
+                                    PseudoOps::BEGIN => {
+                                        offset = i + 1;
+                                        began = true;
+                                    }
+                                    PseudoOps::EXTERN => match tokens.next() {
+                                        None => return Err(format!("Expected label after EXTERN at line {}", i + 1)),
 
-                                    Some(l) => ext.push_str(l),
+                                        Some(label) => buf.push_str(label),
+                                    }
+                                    _ => return Err(format!("Expected BEGIN or EXTERN statement or label at line {}\n\tfound {} instead", i + 1, token))
                                 }
-                                _ => return Err(format!("Expected BEGIN or EXTERN statement or label at line {}\n\tfound {} instead", i + 1, token))
                             }
                         }
                     }
@@ -342,22 +362,9 @@ pub fn assemble(in_asm: &str, breadcrumb: Option<&str>) -> Result<(), String> {
         return Err("END statement missing".to_owned());
     }
 
-    match fs::write(
-        breadcrumb.unwrap_or("a.bdc"),
-        word_labels.lines().count().to_string()
-            + " "
-            + texts.lines().count().to_string().as_str()
-            + " "
-            + labels.lines().count().to_string().as_str()
-            + " "
-            + ext.lines().count().to_string().as_str()
-            + "\n"
-            + word_labels.as_str()
-            + texts.as_str()
-            + labels.as_str()
-            + ext.as_str()
-            + code.as_str(),
-    ) {
+    buf.insert_str(0, (header_len - 1).to_string().as_str());
+
+    match fs::write(breadcrumb.unwrap_or("a.bdc"), buf) {
         Ok(_) => Ok(()),
         Err(why) => Err(why.to_string()),
     }

@@ -6,278 +6,240 @@ pub fn link(breadcrumbs: Vec<&str>, out: Option<&str>) -> Result<(), String> {
     let mut labels = HashMap::new();
     let mut data_labels = HashMap::new();
     let mut externs = Vec::new();
-    let mut data = Vec::new();
+    let mut buf = Vec::new();
 
     breadcrumbs.iter().try_for_each(|bdc| {
         let s = match fs::read_to_string(bdc) {
-            Ok(s) => s,
             Err(why) => return Err(why.to_string()),
+
+            Ok(s) => s,
         };
+
         let mut lines = s.lines().enumerate();
-        let first_line = match lines.next() {
-            Some((_, line)) => line,
+
+        let header_len = match lines.next() {
             None => return Err(format!("{} is empty", bdc)),
+
+            Some((_, line)) => match line.trim().parse::<usize>() {
+                Err(_) => {
+                    return Err(format!(
+                        "Expected integer at first line in {}\n\tfound {} instead",
+                        bdc, line
+                    ));
+                }
+
+                Ok(n) => n,
+            },
         };
 
-        let mut values = first_line.split_whitespace();
-        let n_words = match values.next() {
-            Some(token) => match token.parse::<u32>() {
-                Ok(val) => val,
-                Err(_) => {
-                    return Err(format!(
-                        "Expected an integer as the first value in {} header, found {} instead",
-                        bdc, token
-                    ))
-                }
-            },
-            None => return Err(format!("First line in {} is empty", bdc)),
-        };
-        let n_texts = match values.next() {
-            Some(token) => match token.parse::<u32>() {
-                Ok(val) => val,
-                Err(_) => {
-                    return Err(format!(
-                        "Expected an integer as the second value in {} header, found {} instead",
-                        bdc, token
-                    ))
-                }
-            },
-            None => return Err(format!("First line in {} contains only one value", bdc)),
-        };
-        let n_labels = match values.next() {
-            Some(token) => match token.parse::<u32>() {
-                Ok(val) => val,
-                Err(_) => {
-                    return Err(format!(
-                        "Expected an integer as the third value in {} header, found {} instead",
-                        bdc, token
-                    ))
-                }
-            },
-            None => return Err(format!("First line in {} contains only two values", bdc)),
-        };
-        let n_ext = match values.next() {
-            Some(token) => match token.parse::<u32>() {
-                Ok(val) => val,
-                Err(_) => {
-                    return Err(format!(
-                        "Expected an integer as the fourth value in {} header, found {} instead",
-                        bdc, token
-                    ))
-                }
-            },
-            None => return Err(format!("First line in {} contains only three values", bdc)),
-        };
-        lines
-            .by_ref()
-            .take(n_words as usize)
-            .try_for_each(|(i, line)| {
-                match line.split_once(':') {
-                    Some((label, words)) => {
-                        if let Some(v) = data_labels.get(label) {
-                            return Err(format!(
-                                "Label {} at line {} in {} already defined in previous file ({})",
-                                label,
-                                i + 1,
-                                bdc,
-                                v
-                            ));
-                        }
-                        data_labels.insert(label.to_owned(), (data.len() >> 2) as u32);
-                        words.splitn(u32::MAX as usize, ',').try_for_each(|word| {
-                            match word.parse::<u32>() {
-                                Ok(val) => val
-                                    .to_le_bytes()
-                                    .into_iter()
-                                    .for_each(|byte| data.push(byte)),
-                                Err(_) => {
-                                    return Err(format!(
-                                        "Expected integer at line {} in {}, found {} instead",
-                                        i + 1,
-                                        bdc,
-                                        word
-                                    ))
-                                }
-                            }
-                            Ok(())
-                        })?
+        lines.by_ref().take(header_len).try_for_each(|(i, line)| {
+            if let Some((label, data)) = line.split_once(':') {
+                if let Some(text) = data.strip_suffix('\"') {
+                    if labels.keys().any(|k| k == label) || externs.iter().any(|k| k == label) {
+                        return Err(format!(
+                            "Found label redefinition in {} at line {}\n\t{}",
+                            bdc,
+                            i + 1,
+                            label
+                        ));
                     }
-                    None => return Err(format!("Missing colon at line {} in {}", i + 1, bdc)),
-                }
-                Ok(())
-            })?;
 
-        lines
-            .by_ref()
-            .take(n_texts as usize)
-            .try_for_each(|(i, line)| {
-                match line.split_once(':') {
-                    Some((label, text)) => {
-                        if let Some(v) = data_labels.get(label) {
-                            return Err(format!(
-                                "Label {} at line {} in {} already defined in previous file ({})",
-                                label,
-                                i + 1,
-                                bdc,
-                                v
-                            ));
-                        }
-                        data_labels.insert(label.to_owned(), (data.len() >> 2) as u32);
-                        text.bytes().for_each(|byte| data.push(byte));
+                    if data_labels
+                        .insert(label.to_owned(), (buf.len() >> 2) as u32)
+                        .is_some()
+                    {
+                        return Err(format!(
+                            "Found label redefinition in {} at line {}\n\t{}",
+                            bdc,
+                            i + 1,
+                            label
+                        ));
                     }
-                    None => return Err(format!("Missing colon at line {} in {}", i + 1, bdc)),
-                }
-                Ok(())
-            })?;
 
-        lines
-            .by_ref()
-            .take(n_labels as usize)
-            .try_for_each(|(i, line)| {
-                match line.split_once(':') {
-                    Some((label, line_number)) => {
-                        if let Some(v) = labels.get(label) {
-                            return Err(format!(
-                                "Label {} at line {} in {} already defined in previous file ({})",
-                                label,
-                                i + 1,
-                                bdc,
-                                v
-                            ));
-                        }
-                        match line_number.parse::<u32>() {
-                            Ok(val) => labels.insert(label.to_owned(), val + offset as u32),
+                    buf.extend(text.bytes());
+                    buf.push(0);
+                    while buf.len() & 3 != 0 {
+                        buf.push(0);
+                    }
+                } else {
+                    if labels.keys().any(|k| k == label) || externs.iter().any(|k| k == label) {
+                        return Err(format!(
+                            "Found label redefinition in {} at line {}\n\t{}",
+                            bdc,
+                            i + 1,
+                            label
+                        ));
+                    }
+
+                    if data_labels
+                        .insert(label.to_owned(), (buf.len() >> 2) as u32)
+                        .is_some()
+                    {
+                        return Err(format!(
+                            "Found label redefinition in {} at line {}\n\t{}",
+                            bdc,
+                            i + 1,
+                            label
+                        ));
+                    }
+
+                    data.split(',').try_for_each(|word| {
+                        match word.parse::<u32>() {
                             Err(_) => {
                                 return Err(format!(
-                                    "Expected integer at line {} in {}, found {} instead",
+                                    "Expected integer as argument at line {}\n\tfound {} instead",
                                     i + 1,
-                                    bdc,
-                                    line_number
+                                    word
                                 ))
                             }
+
+                            Ok(val) => buf.extend(val.to_le_bytes().into_iter()),
+                        }
+                        Ok(())
+                    })?;
+                }
+                Ok(())
+            } else if let Some((label, line_number)) = line.split_once(' ') {
+                if data_labels.keys().any(|k| k == label) || externs.iter().any(|k| k == label) {
+                    return Err(format!(
+                        "Found label redefinition in {} at line {}\n\t{}",
+                        bdc,
+                        i + 1,
+                        label
+                    ));
+                }
+
+                match line_number.parse::<u32>() {
+                    Err(_) => {
+                        return Err(format!(
+                            "Expected integer at line {} in {}, found {} instead",
+                            i + 1,
+                            bdc,
+                            line_number
+                        ))
+                    }
+
+                    Ok(val) => {
+                        if labels.insert(label.to_owned(), val + offset).is_some() {
+                            return Err(format!(
+                                "Found label redefinition in {} at line {}\n\t{}",
+                                bdc,
+                                i + 1,
+                                label
+                            ));
                         }
                     }
-                    None => return Err(format!("Missing colon at line {} in {}", i + 1, bdc)),
-                };
+                }
                 Ok(())
-            })?;
-
-        lines.by_ref().take(n_ext as usize).for_each(|(_, line)| {
-            if !externs.iter().any(|e| e == line) {
-                externs.push(line.to_owned());
+            } else {
+                if !externs.iter().any(|e| e == line) {
+                    externs.push(line.to_owned());
+                }
+                Ok(())
             }
-        });
+        })?;
 
-        offset += lines.count();
+        offset += lines.count() as u32;
+
         Ok(())
     })?;
 
-    externs
-        .into_iter()
-        .try_for_each(|ext| match data_labels.contains_key(ext.as_str()) {
-            true => Ok(()),
-            false => match labels.contains_key(ext.as_str()) {
-                true => Ok(()),
-                false => Err(format!("EXTERN label {} not defined in object files", ext)),
-            },
-        })?;
+    externs.into_iter().try_for_each(|ext| {
+        if !labels.contains_key(ext.as_str()) && !data_labels.contains_key(ext.as_str()) {
+            return Err(format!("EXTERN label {} not defined in object files", ext));
+        }
+        Ok(())
+    })?;
 
-    let mut buf = vec![offset as u32];
+    for byte in ((buf.len() as u32) >> 2).to_be_bytes() {
+        buf.insert(0, byte);
+    }
 
     breadcrumbs.into_iter().try_for_each(|bdc| {
         let s = match fs::read_to_string(bdc) {
-            Ok(s) => s,
             Err(why) => return Err(why.to_string()),
+
+            Ok(s) => s,
         };
+
         let mut lines = s.lines();
-        let first_line = match lines.next() {
-            Some(line) => line,
+
+        let header_len = match lines.next() {
             None => return Err(format!("{} is empty", bdc)),
+
+            Some(line) => match line.trim().parse::<usize>() {
+                Err(_) => {
+                    return Err(format!(
+                        "Expected integer at first line in {}\n\tfound {} instead",
+                        bdc, line
+                    ));
+                }
+
+                Ok(n) => n,
+            },
         };
-        lines.skip(first_line.split_whitespace().map(|tok| {
-            match tok.parse::<u32>() {
-                Ok(v) => v,
-                Err(_) => unreachable!()
-            }
-        }).fold(0, |acc, val| acc + val) as usize)
+
+        lines.skip(header_len)
             .enumerate()
             .try_for_each(|(i, line)| {
                 let mut tokens = line.split_whitespace();
-                match tokens.next() {
-                    Some(token) => match OpCodes::from_str(token) {
-                        Ok(op) => match tokens.next() {
-                            Some(token) => {
-                                match labels.get(token) {
-                                    Some(field) => buf.push((op as u32) << 27 | field),
-                                    None => match data_labels.get(token) {
-                                        Some(field) => buf.push((op as u32) << 27 | 1 << 25 | field),
-                                        None => return Err(format!("Label {} used at line {} in {} not defined in object files", token, i + 1, bdc))
+                if let Some(token) = tokens.next() {
+                    if let Ok(_) = PseudoOps::from_str(token) {
+                        return Err(format!("Found non-parsed pseudoinstruction during linking at line {} in {}", i + 1, bdc));
+                    } else if let Ok(op) = OpCodes::from_str(token) {
+                        match tokens.next() {
+                            None => return Err(format!("Expected argument at line {} in {}", i + 1, bdc)),
+
+                            Some(arg) => match op {
+                                OpCodes::IRQ => match arg.parse::<u8>() {
+                                    Err(_) => return Err(format!("Expected integer at line {}\n\tfound {} instead", i + 1, arg)),
+
+                                    Ok(irq_type) => match tokens.next() {
+                                        Some(label) => match irq_type {
+                                            1..=2 => match labels.get(label) {
+                                                None => match data_labels.get(label) {
+                                                    None => return Err(format!("Missing declaration for label {} used at line {} in {}", label, i + 1, bdc)),
+
+                                                    Some(field) => buf.extend(((irq_type as u32) << 25 | field).to_le_bytes().into_iter()),
+                                                }
+                                                Some(field) => buf.extend(((irq_type as u32) << 25 | field).to_le_bytes().into_iter()),
+                                            }
+                                            3 => match u32::from_str_radix(label, 2) {
+                                                Err(_) => return Err(format!("Expected binary number as argument at line {}\n\tfound {} instead", i + 1, token)),
+
+                                                Ok(field) => buf.extend((3 << 25 | field).to_le_bytes().into_iter()),
+                                            }
+                                            0 | 4 => return Err(format!("Unexpected argument at line {}\n\t{}", i + 1, label)),
+                                            _ => return Err(format!("Unknown IRQ type at line {}\n\t{}", i + 1, arg)),
+                                        }
+                                        None => match irq_type {
+                                            0 | 4 => buf.extend(((irq_type as u32) >> 2).to_le_bytes().into_iter()),
+                                            1..=3 => return Err(format!("Expected label at line {}", i + 1)),
+                                            _ => return Err(format!("Unknown IRQ type at line {}\n\t{}", i + 1, irq_type)),
+                                        }
                                     }
+                                }
+                                _ => match labels.get(arg) {
+                                    None => match data_labels.get(arg) {
+                                        None => return Err(format!("Label {} used at line {} in {} not defined in object files", arg, i + 1, bdc)),
+
+                                        Some(field) => buf.extend(((op as u32) << 27 | 1 << 25 | field).to_le_bytes().into_iter()),
+                                    }
+                                    Some(field) => buf.extend(((op as u32) << 27 | field).to_le_bytes().into_iter()),
                                 }
                             }
-                            None => unreachable!()
-                        },
-                        Err(_) => match PseudoOps::from_str(token) {
-                            Ok(psop) => match psop {
-                                PseudoOps::HALT => buf.push(0),
-                                PseudoOps::PRINT => match tokens.next() {
-                                    Some(token) => {
-                                        match labels.get(token) {
-                                            Some(field) => buf.push(1 << 24| field),
-                                            None => match data_labels.get(token) {
-                                                Some(field) => buf.push(1 << 24| field),
-                                                None => return Err(format!("Label {} used at line {} in {} not defined in object files", token, i + 1, bdc))
-                                            }
-                                        }
-                                    }
-                                    None => unreachable!()
-                                }
-                                PseudoOps::READ => match tokens.next() {
-                                    Some(token) => {
-                                        match labels.get(token) {
-                                            Some(field) => buf.push(2 << 24| field),
-                                            None => match data_labels.get(token) {
-                                                Some(field) => buf.push(2 << 24| field),
-                                                None => return Err(format!("Label {} used at line {} in {} not defined in object files", token, i + 1, bdc))
-                                            }
-                                        }
-                                    }
-                                    None => unreachable!()
-                                }
-                                PseudoOps::SET => {
-                                    let field = match tokens.next() {
-                                        Some(token) => match u32::from_str_radix(token, 2) {
-                                            Ok(field) => field,
-                                            Err(_) => unreachable!()
-                                        }
-                                        None => unreachable!()
-                                    };
-                                    buf.push(3 << 24 | field);
-                                }
-                                PseudoOps::CLEAR => buf.push(4 << 24),
-                                _ => (),
-                            },
-                            Err(_) => unreachable!()
-                        },
+                        }
+                        if let Some(token) = tokens.next() {
+                            return Err(format!("Unexpected argument at line {}\n\t{}", i + 1, token))
+                        }
+                    } else {
+                        return Err(format!("Expected instruction at line {} in {}\n\tfound {} instead", i + 1, bdc, token))
                     }
-                    None => unreachable!(),
                 }
             Ok(())
         })?;
         Ok(())
     })?;
-
-    let mut buf = buf
-        .into_iter()
-        .map(|seq| seq.to_le_bytes())
-        .flatten()
-        .collect::<Vec<_>>();
-
-    buf.extend(data);
-
-    while buf.len() % 4 != 0 {
-        buf.push(0);
-    }
 
     match fs::write(out.unwrap_or("a.fita"), buf) {
         Ok(_) => (),
