@@ -74,6 +74,34 @@ pub fn assemble(in_asm: &str, breadcrumb: Option<&str>) -> Result<(), String> {
         if !line.is_empty() {
             if ended {
                 return Err("File continues after END".to_owned());
+            } else if let Some((label, text)) = line.split_once(".text") {
+                if began {
+                    return Err(format!("Found .text directive after BEGIN statement at line {}", i + 1));
+                }
+
+                let label = label.trim_end();
+                match label.strip_suffix(':') {
+                    None => return Err(format!("Expected label before .text directive at line {}", i + 1)),
+
+                    Some(label) => match label.trim_end().chars().any(|c| c.is_whitespace()) {
+                        true => return Err(format!("Found whitespace in label at line {}\n\t{}", i + 1, label)),
+
+                        false => if buf.lines().take(header_len).any(|line| line.starts_with(label)) {
+                            return Err(format!("Found label redefinition at line {}\n\t{}", i + 1, label));
+                        }
+                    }
+                }
+
+                let text = match text.strip_prefix(|c: char| c.is_whitespace()) {
+                    None => return Err(format!("Expected whitespace after .text directive at line {}", i + 1)),
+
+                    Some(text) => text,
+                };
+
+                buf.extend(label.chars().filter(|c| !c.is_whitespace()));
+                buf.push_str(text);
+                buf.push_str("\"\n");
+                header_len += 1;
             } else if let Some((label, words)) = line.split_once(".word") {
                 if began {
                     return Err(format!("Found .word directive after BEGIN statement at line {}", i + 1));
@@ -103,34 +131,6 @@ pub fn assemble(in_asm: &str, breadcrumb: Option<&str>) -> Result<(), String> {
 
                 buf.extend(label.chars().chain(words.chars()).filter(|c| !c.is_whitespace()));
                 buf.push('\n');
-                header_len += 1;
-            } else if let Some((label, text)) = line.split_once(".text") {
-                if began {
-                    return Err(format!("Found .text directive after BEGIN statement at line {}", i + 1));
-                }
-
-                let label = label.trim_end();
-                match label.strip_suffix(':') {
-                    None => return Err(format!("Expected label before .text directive at line {}", i + 1)),
-
-                    Some(label) => match label.trim_end().chars().any(|c| c.is_whitespace()) {
-                        true => return Err(format!("Found whitespace in label at line {}\n\t{}", i + 1, label)),
-
-                        false => if buf.lines().take(header_len).any(|line| line.starts_with(label)) {
-                            return Err(format!("Found label redefinition at line {}\n\t{}", i + 1, label));
-                        }
-                    }
-                }
-
-                let text = match text.strip_prefix(|c: char| c.is_whitespace()) {
-                    None => return Err(format!("Expected whitespace after .text directive at line {}", i + 1)),
-
-                    Some(text) => text,
-                };
-
-                buf.extend(label.chars().filter(|c| !c.is_whitespace()));
-                buf.push_str(text);
-                buf.push_str("\"\n");
                 header_len += 1;
             } else if let Some((label, text)) = line.split_once(':') {
                 if !began {
