@@ -2,10 +2,12 @@ use super::assembler::{OpCodes, PseudoOps};
 use std::{collections::HashMap, fs, str::FromStr};
 
 pub fn link(breadcrumbs: Vec<&str>, out: Option<&str>) -> Result<(), String> {
-    let mut offset = 0;
+    let mut offset: u32 = 0;
+
+    // let mut data_labels = HashMap::new();
     let mut labels = HashMap::new();
-    let mut data_labels = HashMap::new();
-    let mut externs = Vec::new();
+    let mut extern_labels = Vec::new();
+
     let mut buf = Vec::new();
 
     breadcrumbs.iter().try_for_each(|bdc| {
@@ -35,7 +37,7 @@ pub fn link(breadcrumbs: Vec<&str>, out: Option<&str>) -> Result<(), String> {
         lines.by_ref().take(header_len).try_for_each(|(i, line)| {
             if let Some((label, data)) = line.split_once(':') {
                 if let Some(text) = data.strip_suffix('\"') {
-                    if labels.keys().any(|k| k == label) || externs.iter().any(|k| k == label) {
+                    if labels.keys().any(|k| k == label) {
                         return Err(format!(
                             "Found label redefinition in {} at line {}\n\t{}",
                             bdc,
@@ -44,8 +46,22 @@ pub fn link(breadcrumbs: Vec<&str>, out: Option<&str>) -> Result<(), String> {
                         ));
                     }
 
-                    if data_labels
-                        .insert(label.to_owned(), (buf.len() >> 2) as u32)
+                    if labels
+                        .insert(
+                            label.to_owned(),
+                            1 << 25
+                                | match u32::try_from(buf.len() >> 2) {
+                                    Err(_) => return Err("File too big!".to_owned()),
+
+                                    Ok(v) => {
+                                        if v.leading_zeros() < 7 {
+                                            return Err("File too big!".to_owned());
+                                        }
+
+                                        v
+                                    }
+                                },
+                        )
                         .is_some()
                     {
                         return Err(format!(
@@ -62,7 +78,7 @@ pub fn link(breadcrumbs: Vec<&str>, out: Option<&str>) -> Result<(), String> {
                         buf.push(0);
                     }
                 } else {
-                    if labels.keys().any(|k| k == label) || externs.iter().any(|k| k == label) {
+                    if labels.keys().any(|k| k == label) {
                         return Err(format!(
                             "Found label redefinition in {} at line {}\n\t{}",
                             bdc,
@@ -71,8 +87,22 @@ pub fn link(breadcrumbs: Vec<&str>, out: Option<&str>) -> Result<(), String> {
                         ));
                     }
 
-                    if data_labels
-                        .insert(label.to_owned(), (buf.len() >> 2) as u32)
+                    if labels
+                        .insert(
+                            label.to_owned(),
+                            1 << 25
+                                | match u32::try_from(buf.len() >> 2) {
+                                    Err(_) => return Err("File too big!".to_owned()),
+
+                                    Ok(v) => {
+                                        if v.leading_zeros() < 7 {
+                                            return Err("File too big!".to_owned());
+                                        }
+
+                                        v
+                                    }
+                                },
+                        )
                         .is_some()
                     {
                         return Err(format!(
@@ -100,7 +130,7 @@ pub fn link(breadcrumbs: Vec<&str>, out: Option<&str>) -> Result<(), String> {
                 }
                 Ok(())
             } else if let Some((label, line_number)) = line.split_once(' ') {
-                if data_labels.keys().any(|k| k == label) || externs.iter().any(|k| k == label) {
+                if labels.keys().any(|k| k == label) {
                     return Err(format!(
                         "Found label redefinition in {} at line {}\n\t{}",
                         bdc,
@@ -132,26 +162,48 @@ pub fn link(breadcrumbs: Vec<&str>, out: Option<&str>) -> Result<(), String> {
                 }
                 Ok(())
             } else {
-                if !externs.iter().any(|e| e == line) {
-                    externs.push(line.to_owned());
+                if !extern_labels.iter().any(|e| e == line) {
+                    extern_labels.push(line.to_owned());
                 }
                 Ok(())
             }
         })?;
 
-        offset += lines.count() as u32;
+        offset += match u32::try_from(lines.count()) {
+            Err(_) => return Err("File too big!".to_owned()),
+
+            Ok(v) => {
+                if v.leading_zeros() < 7 {
+                    return Err("File too big!".to_owned());
+                }
+
+                v
+            }
+        };
 
         Ok(())
     })?;
 
-    externs.into_iter().try_for_each(|ext| {
-        if !labels.contains_key(ext.as_str()) && !data_labels.contains_key(ext.as_str()) {
+    extern_labels.into_iter().try_for_each(|ext| {
+        if !labels.contains_key(ext.as_str()) {
             return Err(format!("EXTERN label {} not defined in object files", ext));
         }
         Ok(())
     })?;
 
-    for byte in ((buf.len() as u32) >> 2).to_be_bytes() {
+    for byte in match u32::try_from(buf.len() >> 2) {
+        Err(_) => return Err("File too big!".to_owned()),
+
+        Ok(v) => {
+            if v.leading_zeros() < 7 {
+                return Err("File too big!".to_owned());
+            }
+
+            v
+        }
+    }
+    .to_be_bytes()
+    {
         buf.insert(0, byte);
     }
 
@@ -197,35 +249,47 @@ pub fn link(breadcrumbs: Vec<&str>, out: Option<&str>) -> Result<(), String> {
                                     Ok(irq_type) => match tokens.next() {
                                         Some(label) => match irq_type {
                                             1..=2 => match labels.get(label) {
-                                                None => match data_labels.get(label) {
-                                                    None => return Err(format!("Missing declaration for label {} used at line {} in {}", label, i + 1, bdc)),
+                                                None => return Err(format!("Missing declaration for label {} used at line {} in {}", label, i + 1, bdc)),
 
-                                                    Some(field) => buf.extend(((irq_type as u32) << 25 | field).to_le_bytes().into_iter()),
+                                                Some(field) => {
+                                                    if field.leading_zeros() < 5 {
+                                                        return Err("File too big!".to_owned());
+                                                    }
+
+                                                    buf.extend((u32::from(irq_type) << 25 | field).to_le_bytes().into_iter());
                                                 }
-                                                Some(field) => buf.extend(((irq_type as u32) << 25 | field).to_le_bytes().into_iter()),
                                             }
                                             3 => match u32::from_str_radix(label, 2) {
                                                 Err(_) => return Err(format!("Expected binary number as argument at line {}\n\tfound {} instead", i + 1, token)),
 
-                                                Ok(field) => buf.extend((3 << 25 | field).to_le_bytes().into_iter()),
+                                                Ok(field) => {
+                                                    if field.leading_zeros() < 5 {
+                                                        return Err("File too big!".to_owned());
+                                                    }
+
+                                                    buf.extend((3 << 25 | field).to_le_bytes().into_iter());
+                                                }
                                             }
                                             0 | 4 => return Err(format!("Unexpected argument at line {}\n\t{}", i + 1, label)),
                                             _ => return Err(format!("Unknown IRQ type at line {}\n\t{}", i + 1, arg)),
                                         }
                                         None => match irq_type {
-                                            0 | 4 => buf.extend(((irq_type as u32) >> 2).to_le_bytes().into_iter()),
+                                            0 | 4 => buf.extend((u32::from(irq_type >> 2)).to_le_bytes().into_iter()),
                                             1..=3 => return Err(format!("Expected label at line {}", i + 1)),
                                             _ => return Err(format!("Unknown IRQ type at line {}\n\t{}", i + 1, irq_type)),
                                         }
                                     }
                                 }
                                 _ => match labels.get(arg) {
-                                    None => match data_labels.get(arg) {
-                                        None => return Err(format!("Label {} used at line {} in {} not defined in object files", arg, i + 1, bdc)),
+                                    None => return Err(format!("Label {} used at line {} in {} not defined in object files", arg, i + 1, bdc)),
 
-                                        Some(field) => buf.extend(((op as u32) << 27 | 1 << 25 | field).to_le_bytes().into_iter()),
+                                    Some(field) => {
+                                        if field.leading_zeros() < 5 {
+                                            return Err("File too big!".to_owned());
+                                        }
+
+                                        buf.extend((u32::from(op as u8) << 27 | field).to_le_bytes().into_iter());
                                     }
-                                    Some(field) => buf.extend(((op as u32) << 27 | field).to_le_bytes().into_iter()),
                                 }
                             }
                         }

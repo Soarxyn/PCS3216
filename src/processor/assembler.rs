@@ -62,7 +62,7 @@ pub fn assemble(in_asm: &str, breadcrumb: Option<&str>) -> Result<(), String> {
     let mut began = false;
     let mut ended = false;
 
-    let mut header_len = 1;
+    let mut header_len: u32 = 1;
     let mut offset = 0;
 
     s.lines().enumerate().try_for_each(|(i, line)| {
@@ -86,7 +86,11 @@ pub fn assemble(in_asm: &str, breadcrumb: Option<&str>) -> Result<(), String> {
                     Some(label) => match label.trim_end().chars().any(|c| c.is_whitespace()) {
                         true => return Err(format!("Found whitespace in label at line {}\n\t{}", i + 1, label)),
 
-                        false => if buf.lines().take(header_len).any(|line| line.starts_with(label)) {
+                        false => if buf.lines().take(match usize::try_from(header_len) {
+                            Err(_) => return Err("16 bit architecture unsupported".to_owned()),
+
+                            Ok(v) => v,
+                        }).any(|line| line.starts_with(label)) {
                             return Err(format!("Found label redefinition at line {}\n\t{}", i + 1, label));
                         }
                     }
@@ -114,7 +118,11 @@ pub fn assemble(in_asm: &str, breadcrumb: Option<&str>) -> Result<(), String> {
                     Some(label) => match label.trim_end().chars().any(|c| c.is_whitespace()) {
                         true => return Err(format!("Found whitespace in label at line {}\n\t{}", i + 1, label)),
 
-                        false => if buf.lines().take(header_len).any(|line| line.starts_with(label)) {
+                        false => if buf.lines().take(match usize::try_from(header_len) {
+                            Err(_) => return Err("16 bit architecture unsupported".to_owned()),
+
+                            Ok(v) => v,
+                        }).any(|line| line.starts_with(label)) {
                             return Err(format!("Found label redefinition at line {}\n\t{}", i + 1, label));
                         }
                     }
@@ -141,14 +149,36 @@ pub fn assemble(in_asm: &str, breadcrumb: Option<&str>) -> Result<(), String> {
                 match label.chars().any(|c| c.is_whitespace()) {
                     true => return Err(format!("Found whitespace in label at line {}\n\t{}", i + 1, label)),
 
-                    false => if buf.lines().take(header_len).any(|line| line.starts_with(label)) {
+                    false => if buf.lines().take(match usize::try_from(header_len) {
+                        Err(_) => return Err("16 bit architecture unsupported".to_owned()),
+
+                        Ok(v) => v,
+                    }).any(|line| line.starts_with(label)) {
                         return Err(format!("Label {} found at line {} previously defined", label, i + 1));
                     }
                 }
 
-                let string = label.to_owned() + " " + (i - offset).to_string().as_str() + "\n";
+                let string = label.to_owned() + " " + match u32::try_from(i - match usize::try_from(offset) {
+                    Err(_) => return Err("16 bit architecture unsupported".to_owned()),
 
-                buf.insert_str(buf.lines().take(header_len).map(|line| line.bytes().count() + 1).reduce(|acc, n| acc + n).unwrap_or(0), string.as_str());
+                    Ok(v) => v,
+                }) {
+                    Err(_) => return Err("File too big!".to_owned()),
+
+                    Ok(v) => {
+                        if v.leading_zeros() < 7 {
+                            return Err("File too big!".to_owned());
+                        }
+
+                        v
+                    }
+                }.to_string().as_str() + "\n";
+
+                buf.insert_str(buf.lines().take(match usize::try_from(header_len) {
+                    Err(_) => return Err("16 bit architecture unsupported".to_owned()),
+
+                    Ok(v) => v,
+                }).map(|line| line.bytes().count() + 1).reduce(|acc, n| acc + n).unwrap_or(0), string.as_str());
                 header_len += 1;
 
                 let mut tokens = text.split_whitespace();
@@ -339,7 +369,11 @@ pub fn assemble(in_asm: &str, breadcrumb: Option<&str>) -> Result<(), String> {
                                 }
                                 false => match psop {
                                     PseudoOps::BEGIN => {
-                                        offset = i + 1;
+                                        offset = match u32::try_from(i + 1) {
+                                            Err(_) => return Err("File too big!".to_owned()),
+
+                                            Ok(v) => v,
+                                        };
                                         began = true;
                                     }
                                     PseudoOps::EXTERN => match tokens.next() {
