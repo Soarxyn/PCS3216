@@ -1,7 +1,9 @@
 use super::assembler::{OpCodes, PseudoOps};
+use pyo3::prelude::*;
 use std::{collections::HashMap, fs, str::FromStr};
 
-pub fn link(breadcrumbs: Vec<&str>, out: Option<&str>) -> Result<(), String> {
+#[pyfunction]
+pub fn link(breadcrumbs: Vec<&str>, out: Option<&str>) -> PyResult<String> {
     let mut offset: u32 = 0;
 
     // let mut data_labels = HashMap::new();
@@ -10,7 +12,7 @@ pub fn link(breadcrumbs: Vec<&str>, out: Option<&str>) -> Result<(), String> {
 
     let mut buf = Vec::new();
 
-    breadcrumbs.iter().try_for_each(|bdc| {
+    match breadcrumbs.iter().try_for_each(|bdc| {
         let s = match fs::read_to_string(bdc) {
             Err(why) => return Err(why.to_string()),
 
@@ -182,21 +184,27 @@ pub fn link(breadcrumbs: Vec<&str>, out: Option<&str>) -> Result<(), String> {
         };
 
         Ok(())
-    })?;
+    }) {
+        Ok(()) => (),
+        Err(why) => return Ok(why),
+    }
 
-    extern_labels.into_iter().try_for_each(|ext| {
+    match extern_labels.into_iter().try_for_each(|ext| {
         if !labels.contains_key(ext.as_str()) {
             return Err(format!("EXTERN label {} not defined in object files", ext));
         }
         Ok(())
-    })?;
+    }) {
+        Ok(()) => (),
+        Err(why) => return Ok(why),
+    }
 
     for byte in match u32::try_from(buf.len() >> 2) {
-        Err(_) => return Err("File too big!".to_owned()),
+        Err(_) => return Ok("File too big!".to_owned()),
 
         Ok(v) => {
             if v.leading_zeros() < 7 {
-                return Err("File too big!".to_owned());
+                return Ok("File too big!".to_owned());
             }
 
             v
@@ -207,7 +215,7 @@ pub fn link(breadcrumbs: Vec<&str>, out: Option<&str>) -> Result<(), String> {
         buf.insert(0, byte);
     }
 
-    breadcrumbs.into_iter().try_for_each(|bdc| {
+    match breadcrumbs.into_iter().try_for_each(|bdc| {
         let s = match fs::read_to_string(bdc) {
             Err(why) => return Err(why.to_string()),
 
@@ -303,11 +311,13 @@ pub fn link(breadcrumbs: Vec<&str>, out: Option<&str>) -> Result<(), String> {
             Ok(())
         })?;
         Ok(())
-    })?;
+    }) {
+        Ok(()) => (),
+        Err(why) => return Ok(why),
+    }
 
     match fs::write(out.unwrap_or("a.fita"), buf) {
-        Ok(_) => (),
-        Err(why) => return Err(why.to_string()),
-    };
-    Ok(())
+        Ok(_) => Ok("Linking successful".to_owned()),
+        Err(why) => Ok(why.to_string()),
+    }
 }

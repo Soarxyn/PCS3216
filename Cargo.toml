@@ -4,7 +4,11 @@ version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+name = "sisprog"
+crate-type = ["cdylib"]
 
 [dependencies]
-strum = "0.24"
-strum_macros = "0.24"
+pyo3 = { version = "0.16.5", features = ["extension-module"] }
+strum = "0.24.1"
+strum_macros = "0.24.2"

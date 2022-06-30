@@ -1,3 +1,4 @@
+use pyo3::prelude::*;
 use std::{fs, str::FromStr};
 
 #[repr(u8)]
@@ -50,10 +51,11 @@ pub enum PseudoOps {
     EXTERN,
 }
 
-pub fn assemble(in_asm: &str, breadcrumb: Option<&str>) -> Result<(), String> {
+#[pyfunction]
+pub fn assemble(in_asm: &str, breadcrumb: Option<&str>) -> PyResult<String> {
     let s = match fs::read_to_string(in_asm) {
         Ok(s) => s,
-        Err(why) => return Err(why.to_string()),
+        Err(why) => return Ok(why.to_string()),
     };
 
     let mut buf = String::with_capacity(s.len());
@@ -65,7 +67,7 @@ pub fn assemble(in_asm: &str, breadcrumb: Option<&str>) -> Result<(), String> {
     let mut header_len: u32 = 1;
     let mut offset = 0;
 
-    s.lines().enumerate().try_for_each(|(i, line)| {
+    match s.lines().enumerate().try_for_each(|(i, line)| {
         let line = match line.split_once("//") {
             Some((code, _comment)) => code.trim(),
             None => line.trim()
@@ -390,16 +392,19 @@ pub fn assemble(in_asm: &str, breadcrumb: Option<&str>) -> Result<(), String> {
             }
         }
         Ok(())
-    })?;
+    }) {
+        Ok(()) => (),
+        Err(why) => return Ok(why),
+    }
 
     if !ended {
-        return Err("END statement missing".to_owned());
+        return Ok("END statement missing".to_owned());
     }
 
     buf.insert_str(0, (header_len - 1).to_string().as_str());
 
     match fs::write(breadcrumb.unwrap_or("a.bdc"), buf) {
-        Ok(_) => Ok(()),
-        Err(why) => Err(why.to_string()),
+        Ok(_) => Ok("Assembly successful".to_owned()),
+        Err(why) => Ok(why.to_string()),
     }
 }
