@@ -1,5 +1,6 @@
 /.env
 /target
+/sisprog.*
 *.bdc
 *.fita
 *.qck
