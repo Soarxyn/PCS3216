@@ -13,10 +13,11 @@ from textual.reactive import Reactive
 from textual.widget import Widget
 
 from memoryApp import memoryApps
+from folderOpen import folderOpen
 
 class cmdLine(Widget):
     title = ""
-    line = Reactive("cmd> ")
+    line = Reactive(Text("cmd> "))
     cmdText = ""
     history = list()
     i = 0
@@ -25,23 +26,22 @@ class cmdLine(Widget):
         super().__init__(title)
         self.title = title
         
-    def commands(self, cmd: str):
-        if cmd == "":
+    def commands(self, cmd: iter):
+        if len(cmd) < 1:
             return
-        cmdSplited = cmd.split()
-        cmdSplited[0].lower()
-        if len(cmdSplited) == 1:
-            return
-        if cmdSplited[0] == "load":
-            memoryApps().addApp(cmdSplited[1])
-        elif cmdSplited[0] == "assemble":
+        cmd[0].lower()
+        # if len(cmdSplited) == 1:
+        #     return
+        if cmd[0] == "load":
+            memoryApps().addApp(cmd[1])
+        elif cmd[0] == "assemble":
             # chamar assembler
             pass
-        elif cmdSplited[0] == "simulate":
+        elif cmd[0] == "simulate":
             pass
     
     def on_focus(self) -> None:
-        self.line += "_"
+        self.line = Text("cmd> ").append(self.cmdText).append("_", style=Style(blink=True))
         
     def on_blur(self) -> None:
         self.line = self.line[:-1]
@@ -51,9 +51,12 @@ class cmdLine(Widget):
             self.cmdText = self.cmdText[:-1]
         elif event.key == "ctrl+a" or event.key == "left" or event.key == "right":
             pass
+        elif event.key == "ctrl+r":
+            folderOpen().updater()
         elif event.key == "enter":
-            self.history.append(self.cmdText)
-            self.commands(self.cmdText)
+            if not self.cmdText.isspace():
+                self.history.append(self.cmdText)
+                self.commands(self.cmdText.split())
             self.cmdText = ""
         elif event.key == "up":
             if self.i != -len(self.history):
@@ -69,14 +72,7 @@ class cmdLine(Widget):
         self.line = Text("cmd> ").append(self.cmdText).append("_", style=Style(blink=True))
 
     def render(self) -> RenderableType:
-        printedHistory = list()
-        cmdInput = self.line
-        # return Panel(renderizavel,
-        #              title=self.title,
-        #              title_align="left",
-        #              border_style= Style(color= "green"),
-        #              box= DOUBLE)
-        
+    
         grid = Table(show_header= False,
                      expand= True,
                      box= box.HEAVY,
@@ -87,5 +83,5 @@ class cmdLine(Widget):
                 grid.add_row(self.history[-4+i])
             else:
                 grid.add_row("")
-        grid.add_row(cmdInput)
+        grid.add_row(self.line)
         return grid
