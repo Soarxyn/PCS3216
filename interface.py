@@ -21,6 +21,9 @@ class _interface(Widget):
     def changeMode(self, mode: str):
         self.actualMode = mode
         
+    def refresher(self):
+        self.layout = Layout()
+        
     def render(self) -> RenderableType:
         if self.actualMode == "Home":
             self.layout.split_row(
