@@ -10,7 +10,8 @@ class helpList(Widget):
     
     helpContents = ["[b]ASSEMBLE [i]arquivo[/]",
                     "[b]LOAD [i]arquivo[/]",
-                    "[b]ALGO [i]arquivo[/]",
+                    "[b]SIMULATE [i]arquivo[/]",
+                    "[b]HOME[/]",
                     ]
     
     helpBar = Tree("Comandos")
@@ -20,5 +21,5 @@ class helpList(Widget):
     
     def render(self) -> RenderableType:
         return Panel(Align.left(self.helpBar),
-                     title= "barra",
-                     border_style= Style(color= "red"))
+                     title= "Comandos",
+                     border_style= Style(color= "bright_magenta"))

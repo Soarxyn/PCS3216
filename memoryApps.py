@@ -10,21 +10,17 @@ from textual.widget import Widget
 class _memoryApps(Widget):
     _instance = None
     
+    apps = Reactive(Tree("Memória"))
     appList = Tree("Memória") 
-    
-    apps = Reactive("")
 
     def addApp(self, name: str):
         self.appList.add(name)
-        self.apps = ""
         self.apps = self.appList
 
     def render(self) -> RenderableType:
-        renderizavel = Align.left(self.apps)
-        return Panel(renderizavel,
-                     title="Aplicativos carregados",
-                     title_align="left",
-                     border_style= Style(color= "blue"))
+        return Panel(Align(self.apps),
+                     title= "Aplicativos carregados",
+                     border_style= Style(color= "bright_cyan"))
 
 def memoryApps():
     if _memoryApps._instance is None:
