@@ -32,6 +32,7 @@ class _cmdLine(Widget):
                      "simulate",
                      "load",
                      "assemble",
+                     "link",
                      ]
     ignoreKeys = ["ctrl+a",
                   "ctrl+r",
@@ -93,6 +94,27 @@ class _cmdLine(Widget):
                         self.printedHistory.append(
                             Text(result, style= errorStyle)
                         )
+        elif cmd[0] == "link":
+            if cmd.count("-o") == 0:
+                result = link(cmd[1:])
+                if result == "Linking successful":
+                    self.printedHistory.append(
+                        Text("Linked " + str(cmd[1:]), style= self.goodStyle)
+                    )
+                else:
+                    self.printedHistory.append(
+                        Text(result, style= errorStyle)
+                    )
+            else:
+                result = link(cmd[1:-2], cmd[-1])
+                if result == "Linking successful":
+                    self.printedHistory.append(
+                        Text("Linked " + str(cmd[1:-2]) + " into " + cmd[-1], style= self.goodStyle)
+                    )
+                else:
+                    self.printedHistory.append(
+                        Text(result, style= errorStyle)
+                    )
         elif cmd[0] == "simulate":
             interface().changeMode("Simulation")
     
