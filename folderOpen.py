@@ -12,18 +12,25 @@ import os
 class _folderOpen(Widget):
     _instance = None
         
-    archs = Reactive(Tree("src"))
-
-    def updater(self):
-        archives = os.scandir("./src")
+    def getFiles(self) -> Tree:
+        archives = os.scandir("./root")
         archList = Tree("src")
         for arch in archives:
             if arch.is_file():
                 archList.add(arch.name)
-        self.archs = archList
+        return archList
+    
+    archives = os.scandir("./root")
+    archList = Tree("src")
+    for arch in archives:
+        if arch.is_file():
+            archList.add(arch.name)
+    archs = Reactive(archList)
+    
+    def updater(self):
+        self.archs = self.getFiles()
 
     def render(self) -> RenderableType:
-        self.updater()
         return Panel(Align(self.archs),
                      title="Pasta externa",
                      border_style= Style(color= "bright_cyan"))
