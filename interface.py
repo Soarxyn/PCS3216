@@ -10,6 +10,8 @@ from textual.widget import Widget
 
 from folderOpen import folderOpen
 from memoryApps import memoryApps
+from specialData import specialData
+from initialScreen import patinhOs
 
 class _interface(Widget):
     _instance = None
@@ -22,13 +24,16 @@ class _interface(Widget):
         self.actualMode = mode
         
     def refresher(self):
+        folderOpen().updater()
+        self.layout = ""
         self.layout = Layout()
         
     def render(self) -> RenderableType:
         if self.actualMode == "Home":
             self.layout.split_row(
                 Layout(folderOpen()),
-                Layout(memoryApps())
+                # Layout(memoryApps())
+                Layout(patinhOs())
             )
         elif self.actualMode == "Simulation":
             self.layout.split_row(
