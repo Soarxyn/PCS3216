@@ -11,11 +11,23 @@ class _memoryApps(Widget):
     _instance = None
     
     apps = Reactive(Tree("Memória"))
-    appList = Tree("Memória") 
+    appList = list() 
 
-    def addApp(self, name: str):
-        self.appList.add(name)
-        self.apps = self.appList
+    def addApp(self, name: str) -> str:
+        if self.appList.count(name) == 1:
+            return "Erro: arquivo já carregado"
+        self.appList.append(name)
+        self.apps = Tree("Memória")
+        for i in range(len(self.appList)):
+            self.apps.add(self.appList[i])
+        
+    def removeApp(self, name: str) -> str:
+        if self.appList.count(name) == 0:
+            return "Erro: arquivo não carregado"
+        self.appList.remove(name)
+        self.apps = Tree("Memória")
+        for i in range(len(self.appList)):
+            self.apps.add(self.appList[i])
 
     def render(self) -> RenderableType:
         return Panel(Align(self.apps),
