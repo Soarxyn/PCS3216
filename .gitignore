@@ -5,3 +5,4 @@
 *.fita
 *.qck
 *.log
+/root/*
