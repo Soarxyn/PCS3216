@@ -219,6 +219,10 @@ class _cmdLine(Widget):
                     if os.path.exists("./root/" + cmd[1]):
                         codePeeker().setPath(cmd[1])
                         interface().refresher()
+                    else:
+                        self.printedHistory.append(
+                            Text("Arquivo inexistente: " + str(cmd[1]), style= self.errorStyle)
+                        )
             elif cmd[0] == "unload":
                 if len(cmd) > 2:
                     self.printedHistory.append(
