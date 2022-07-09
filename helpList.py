@@ -8,15 +8,18 @@ from textual.widget import Widget
 
 class helpList(Widget):
     
-    helpContents = ["[b]ASSEMBLE [i]arquivo[/i] \[-o saida][/]",
-                    "[b]LINK [i]arquivos[/i] \[-o saida][/]",
-                    "[b]LOAD [i]arquivo[/]",
-                    "[b]HOME[/]",
-                    "[b]SIMULATE [i]arquivo[/]",
-                    "[b]RUN[/]",
-                    "[b]PEEK [i]arquivo[/]",    #IMPLEMENTAR
-                    "[b]UNLOAD [i]arquivo[/]",  #IMPLEMENTAR
-                    ]
+    helpContents = [
+        "[b]ASSEMBLE [i]arquivo[/i] \[-o saida][/]",
+        "[b]LINK [i]arquivos[/i] \[-o saida][/]",
+        "[b]LOAD [i]arquivo[/]",
+        "[b]UNLOAD [i]arquivo[/]",
+        "[b]HOME[/]",
+        "[b]SIMULATE [i]arquivo[/]",
+        "[s]RUN[/]",
+        "[b]PEEK [i]arquivo[/]",
+        "[b]DELETE [i]arquivo[/]",
+        "[s]CLEAR[/]",
+    ]
     
     helpBar = Tree("Comandos")
     

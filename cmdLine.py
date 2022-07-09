@@ -1,12 +1,10 @@
 import os
-import time
 
 from rich import box
 from rich.style import Style
 from rich.console import RenderableType
 from rich.text import Text
 from rich.table import Table
-from rich.layout import Layout
 
 from textual import events
 from textual.reactive import Reactive
@@ -14,6 +12,7 @@ from textual.widget import Widget
 
 from memoryApps import memoryApps
 from interface import interface
+from codePeeker import codePeeker
 from sisprog import assemble, link
 
 class _cmdLine(Widget):
@@ -33,11 +32,12 @@ class _cmdLine(Widget):
                      "run",
                      "simulate",
                      "load",
-                     "unload",      # IMPLEMENTAR
+                     "unload",
                      "assemble",
                      "link",
                      "delete",
-                     "clear",       # IMPLEMENTAR
+                     "clear",
+                     "peek",
                      ]
     ignoreKeys = ["ctrl+q",
                   "ctrl+w",
@@ -64,6 +64,7 @@ class _cmdLine(Widget):
                   "ctrl+b",
                   "ctrl+n",
                   "ctrl+m",
+                  "ctrl+@",
                   ]
         
     def on_key(self, event: events.Key):
@@ -117,8 +118,7 @@ class _cmdLine(Widget):
             self.printedHistory.append(
                 Text("Comando inexistente", style= self.errorStyle)
             )
-            return
-        if len(cmd) == 1:
+        elif len(cmd) == 1:
             if cmd[0] == "home":
                 interface().changeMode("Home")
             elif cmd[0] == "run":
@@ -128,83 +128,105 @@ class _cmdLine(Widget):
                 self.printedHistory.append(
                     Text("Faltam argumentos para " + cmd[0], style= self.errorStyle)
                 )
-                return
-        if cmd[0] == "load":
-            memoryApps().addApp(cmd[1])
-            interface().refresher()
-        elif cmd[0] == "delete":
-            if len(cmd) > 2:
-                self.printedHistory.append(
-                    Text("Argumentos demais: " + str(cmd[2:]), style= self.errorStyle)
-                )
-            else:
-                os.remove("./root/" + cmd[1])
-                self.printedHistory.append(
-                    Text("Deleted " + str(cmd[1]), style= self.goodStyle)
-                )
-                interface().refresher()
-        elif cmd[0] == "assemble":
-            if cmd.count("-o") == 0:
+        else:
+            if cmd[0] == "load":
                 if len(cmd) > 2:
                     self.printedHistory.append(
                         Text("Argumentos demais: " + str(cmd[2:]), style= self.errorStyle)
                     )
                 else:
-                    result = assemble("./root/" + cmd[1])
-                    if result == "Assembly successful":
+                    memoryApps().addApp(cmd[1])
+                    interface().refresher()
+            elif cmd[0] == "delete":
+                if len(cmd) > 2:
+                    self.printedHistory.append(
+                        Text("Argumentos demais: " + str(cmd[2:]), style= self.errorStyle)
+                    )
+                else:
+                    os.remove("./root/" + cmd[1])
+                    self.printedHistory.append(
+                        Text("Deleted " + str(cmd[1]), style= self.goodStyle)
+                    )
+                    interface().refresher()
+            elif cmd[0] == "assemble":
+                if cmd.count("-o") == 0:
+                    if len(cmd) > 2:
                         self.printedHistory.append(
-                            Text("Assembled " + cmd[1], style= self.goodStyle)
+                            Text("Argumentos demais: " + str(cmd[2:]), style= self.errorStyle)
                         )
-                        interface().refresher()
+                    else:
+                        result = assemble("./root/" + cmd[1])
+                        if result == "Assembly successful":
+                            self.printedHistory.append(
+                                Text("Assembled " + cmd[1], style= self.goodStyle)
+                            )
+                            interface().refresher()
+                        else:
+                            self.printedHistory.append(
+                                Text(result, style= self.errorStyle)
+                            )
+                else:
+                    if len(cmd) > 4:
+                        self.printedHistory.append(
+                            Text("Argumentos demais: " + str(cmd[4:]), style= self.errorStyle)
+                        )
+                    else:
+                        result = assemble("./root/" + cmd[1], "./root/" + cmd[3])
+                        if result == "Assembly successful":
+                            self.printedHistory.append(
+                                Text("Assembled " + cmd[1] + " into " + cmd[3], style= self.goodStyle)
+                            )
+                            interface().refresher()
+                        else:
+                            self.printedHistory.append(
+                                Text(result, style= self.errorStyle)
+                            )
+            elif cmd[0] == "link":
+                if cmd.count("-o") == 0:
+                    toLink = list()
+                    for k in range(1, len(cmd)):
+                        toLink.append("./root/" + cmd[k])
+                    result = link(toLink)
+                    if result == "Linking successful":
+                        self.printedHistory.append(
+                            Text("Linked " + str(cmd[1:]), style= self.goodStyle)
+                        )
                     else:
                         self.printedHistory.append(
-                            Text(result, style= errorStyle)
+                            Text(result, style= self.errorStyle)
                         )
-            else:
-                if len(cmd) > 4:
-                    self.printedHistory.append(
-                        Text("Argumentos demais: " + str(cmd[4:]), style= self.errorStyle)
-                    )
                 else:
-                    result = assemble("./root/" + cmd[1], "./root/" + cmd[3])
-                    if result == "Assembly successful":
+                    toLink = list()
+                    for k in range(1, len(cmd)-2):
+                        toLink.append("./root/" + cmd[k])
+                    result = link(toLink, cmd[-1])
+                    if result == "Linking successful":
                         self.printedHistory.append(
-                            Text("Assembled " + cmd[1] + " into " + cmd[3], style= self.goodStyle)
+                            Text("Linked " + str(cmd[1:-2]) + " into " + cmd[-1], style= self.goodStyle)
                         )
-                        interface().refresher()
                     else:
                         self.printedHistory.append(
-                            Text(result, style= errorStyle)
+                            Text(result, style= self.errorStyle)
                         )
-        elif cmd[0] == "link":
-            if cmd.count("-o") == 0:
-                toLink = list()
-                for k in range(1, len(cmd)):
-                    toLink.append("./root/" + cmd[k])
-                result = link(toLink)
-                if result == "Linking successful":
+            elif cmd[0] == "simulate":
+                interface().changeMode("Simulation")
+            elif cmd[0] == "peek":
+                if len(cmd) > 2:
                     self.printedHistory.append(
-                        Text("Linked " + str(cmd[1:]), style= self.goodStyle)
+                        Text("Argumentos demais: " + str(cmd[2:]), style= self.errorStyle)
                     )
                 else:
+                    codePeeker().setPath(cmd[1])
+                    interface().refresher()
+            elif cmd[0] == "unload":
+                if len(cmd) > 2:
                     self.printedHistory.append(
-                        Text(result, style= errorStyle)
-                    )
-            else:
-                toLink = list()
-                for k in range(1, len(cmd)-2):
-                    toLink.append("./root/" + cmd[k])
-                result = link(toLink, cmd[-1])
-                if result == "Linking successful":
-                    self.printedHistory.append(
-                        Text("Linked " + str(cmd[1:-2]) + " into " + cmd[-1], style= self.goodStyle)
+                        Text("Argumentos demais: " + str(cmd[2:]), style= self.errorStyle)
                     )
                 else:
-                    self.printedHistory.append(
-                        Text(result, style= errorStyle)
-                    )
-        elif cmd[0] == "simulate":
-            interface().changeMode("Simulation")
+                    memoryApps().removeApp(cmd[1])
+                    interface().refresher()
+                
     
     def on_focus(self) -> None:
         self.line = Text("cmd> ").append(self.cmdText).append("_", style=Style(blink=True))
