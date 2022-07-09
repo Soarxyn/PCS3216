@@ -21,13 +21,12 @@ class _codePeeker(Widget):
     blankText = Text("Rode ").append("Peek ", style= Style(bold= True)).append("arquivo ", style= Style(bold= True, italic= True)).append("para\n    ver um arquivo")
     
     def setPath(self, path: str):
-        if os.path.exists("./root/" + path):
-            self.path = "./root/" + path
-            self.firstLine = 1
-            with open(self.path, 'r') as fp:
-                for self.lineCount, line in enumerate(fp):
-                    pass
-            self.lineCount += 1 # Started on 0
+        self.path = "./root/" + path
+        self.firstLine = 1
+        with open(self.path, 'r') as fp:
+            for self.lineCount, line in enumerate(fp):
+                pass
+        self.lineCount += 1 # Started on 0
     
     def render(self) -> RenderableType:
         self.height = int(3*os.get_terminal_size()[1]/4)

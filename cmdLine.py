@@ -216,8 +216,9 @@ class _cmdLine(Widget):
                         Text("Argumentos demais: " + str(cmd[2:]), style= self.errorStyle)
                     )
                 else:
-                    codePeeker().setPath(cmd[1])
-                    interface().refresher()
+                    if os.path.exists("./root/" + cmd[1]):
+                        codePeeker().setPath(cmd[1])
+                        interface().refresher()
             elif cmd[0] == "unload":
                 if len(cmd) > 2:
                     self.printedHistory.append(
