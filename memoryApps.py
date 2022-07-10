@@ -13,17 +13,13 @@ class _memoryApps(Widget):
     apps = Reactive(Tree("Memória"))
     appList = list() 
 
-    def addApp(self, name: str) -> str:
-        if self.appList.count(name) == 1:
-            return "Erro: arquivo já carregado"
+    def addApp(self, name: str):
         self.appList.append(name)
         self.apps = Tree("Memória")
         for i in range(len(self.appList)):
             self.apps.add(self.appList[i])
         
-    def removeApp(self, name: str) -> str:
-        if self.appList.count(name) == 0:
-            return "Erro: arquivo não carregado"
+    def removeApp(self, name: str):
         self.appList.remove(name)
         self.apps = Tree("Memória")
         for i in range(len(self.appList)):

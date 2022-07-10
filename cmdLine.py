@@ -144,7 +144,10 @@ class _cmdLine(Widget):
         if len(args) == 1:
             self.printError("Faltam argumentos para " + args[0])  
         elif len(args) == 2:
-            pass # rodar o código
+            if memoryApps().appList.count(args[1]) == 1:
+                pass # rodar o codigo
+            else:
+                self.printError("Arquivo não está na memória: " + args[1])
         else:
             self.printError("Argumentos demais: " + str(args[2:]))
     
@@ -152,8 +155,11 @@ class _cmdLine(Widget):
         if len(args) == 1:
             self.printError("Faltam argumentos para " + args[0])  
         elif len(args) == 2:
-            interface().changeMode("Simulation")
-            # rodar codigo linha a linha
+            if memoryApps().appList.count(args[1]) == 1:
+                interface().changeMode("Simulation")
+                # rodar codigo linha a linha
+            else:
+                self.printError("Arquivo não está na memória: " + args[1])
         else:
             self.printError("Argumentos demais: " + str(args[2:]))
     
@@ -161,8 +167,15 @@ class _cmdLine(Widget):
         if len(args) == 1:
             self.printError("Faltam argumentos para " + args[0])  
         elif len(args) == 2:
-            memoryApps().addApp(args[1])
-            interface().refresher()
+            if os.path.exists("./root/" + args[1]):
+                if memoryApps().appList.count(args[1]) == 0:
+                    memoryApps().addApp(args[1])
+                    interface().refresher()
+                    self.printSuccess(args[1] + " adicionado na memória")
+                else:
+                    self.printError("Arquivo já carregado")
+            else:
+                self.printError("Arquivo inexistente: " + args[1])
         else:
             self.printError("Argumentos demais: " + str(args[2:]))
     
@@ -170,8 +183,12 @@ class _cmdLine(Widget):
         if len(args) == 1:
             self.printError("Faltam argumentos para " + args[0])  
         elif len(args) == 2:
-            memoryApps().removeApp(args[1])
-            interface().refresher()
+            if memoryApps().appList.count(args[1]) == 1:
+                memoryApps().removeApp(args[1])
+                interface().refresher()
+                self.printSuccess(args[1] + " removido da memória")
+            else:
+                self.printError("Arquivo não está na memória: " + args[1])
         else:
             self.printError("Argumentos demais: " + str(args[2:]))
     
@@ -193,7 +210,7 @@ class _cmdLine(Widget):
             self.printError("Faltam argumentos para " + args[0])
         elif len(args) == 2:
             if os.path.exists("./root/" + args[1]):
-                codePeeker().setPath(args[1])
+                codePeeker("Home").setPath(args[1])
                 interface().refresher()
             else:
                 self.printError("Arquivo inexistente: " + args[1])
