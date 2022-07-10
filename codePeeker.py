@@ -50,7 +50,9 @@ class _codePeeker(Widget):
                      title= self.path[7:],
                      border_style= Style(color= "bright_cyan"))
         
-def codePeeker():
+def codePeeker(mode: str):
     if _codePeeker._instance is None:
-        _codePeeker._instance = _codePeeker()
-    return _codePeeker._instance
+        _codePeeker._instance = [_codePeeker(), _codePeeker()]
+    if mode == "Home":
+        return _codePeeker._instance[0]
+    return _codePeeker._instance[1]
