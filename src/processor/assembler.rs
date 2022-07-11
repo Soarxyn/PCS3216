@@ -52,10 +52,10 @@ pub enum PseudoOps {
 }
 
 #[pyfunction]
-pub fn assemble(in_asm: &str, breadcrumb: Option<&str>) -> PyResult<String> {
+pub fn assemble(in_asm: &str, breadcrumb: Option<&str>) -> PyResult<(bool, String)> {
     let s = match fs::read_to_string(in_asm) {
         Ok(s) => s,
-        Err(why) => return Ok(why.to_string()),
+        Err(why) => return Ok((false, why.to_string())),
     };
 
     let mut buf = String::with_capacity(s.len());
@@ -394,17 +394,17 @@ pub fn assemble(in_asm: &str, breadcrumb: Option<&str>) -> PyResult<String> {
         Ok(())
     }) {
         Ok(()) => (),
-        Err(why) => return Ok(why),
+        Err(why) => return Ok((false, why)),
     }
 
     if !ended {
-        return Ok("END statement missing".to_owned());
+        return Ok((false, "END statement missing".to_owned()));
     }
 
     buf.insert_str(0, (header_len - 1).to_string().as_str());
 
     match fs::write(breadcrumb.unwrap_or("a.bdc"), buf) {
-        Ok(_) => Ok("Assembly successful".to_owned()),
-        Err(why) => Ok(why.to_string()),
+        Ok(_) => Ok((true, "Assembly successful".to_owned())),
+        Err(why) => Ok((false, why.to_string())),
     }
 }

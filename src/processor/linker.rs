@@ -3,10 +3,9 @@ use pyo3::prelude::*;
 use std::{collections::HashMap, fs, str::FromStr};
 
 #[pyfunction]
-pub fn link(breadcrumbs: Vec<&str>, out: Option<&str>) -> PyResult<String> {
+pub fn link(breadcrumbs: Vec<&str>, out: Option<&str>) -> PyResult<(bool, String)> {
     let mut offset: u32 = 0;
 
-    // let mut data_labels = HashMap::new();
     let mut labels = HashMap::new();
     let mut extern_labels = Vec::new();
 
@@ -186,7 +185,7 @@ pub fn link(breadcrumbs: Vec<&str>, out: Option<&str>) -> PyResult<String> {
         Ok(())
     }) {
         Ok(()) => (),
-        Err(why) => return Ok(why),
+        Err(why) => return Ok((false, why)),
     }
 
     match extern_labels.into_iter().try_for_each(|ext| {
@@ -196,15 +195,15 @@ pub fn link(breadcrumbs: Vec<&str>, out: Option<&str>) -> PyResult<String> {
         Ok(())
     }) {
         Ok(()) => (),
-        Err(why) => return Ok(why),
+        Err(why) => return Ok((false, why)),
     }
 
     for byte in match u32::try_from(buf.len() >> 2) {
-        Err(_) => return Ok("File too big!".to_owned()),
+        Err(_) => return Ok((false, "File too big!".to_owned())),
 
         Ok(v) => {
             if v.leading_zeros() < 7 {
-                return Ok("File too big!".to_owned());
+                return Ok((false, "File too big!".to_owned()));
             }
 
             v
@@ -313,11 +312,11 @@ pub fn link(breadcrumbs: Vec<&str>, out: Option<&str>) -> PyResult<String> {
         Ok(())
     }) {
         Ok(()) => (),
-        Err(why) => return Ok(why),
+        Err(why) => return Ok((false, why)),
     }
 
     match fs::write(out.unwrap_or("a.fita"), buf) {
-        Ok(_) => Ok("Linking successful".to_owned()),
-        Err(why) => Ok(why.to_string()),
+        Ok(_) => Ok((true, "Linking successful".to_owned())),
+        Err(why) => Ok((false, why.to_string())),
     }
 }
