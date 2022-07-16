@@ -1,32 +1,22 @@
-pub trait MemoryMapped {
-    fn read(&self, addr: u32) -> u32;
-    fn write(&mut self, addr: u32, val: u32);
-    fn in_range(&self, addr: u32) -> bool;
+
+pub const MEM_SIZE: usize = 1 << 10;
+
+#[derive(Clone)]
+pub struct MemoryCache {
+    pub content: [u32; MEM_SIZE],
+    pub msb: u32
 }
 
-pub const MEM_SIZE: usize = 1 << 25;
+impl MemoryCache {
+    pub fn read(&self, addr: u32) -> u32 {
+        self.content[(addr % MEM_SIZE as u32) as usize]
+    }
 
-macro_rules! map_memory {
-    ($mem_name:ident, $msb:expr) => {
-        pub struct $mem_name(pub [u32; MEM_SIZE]);
+    pub fn write(&mut self, addr: u32, val: u32) {
+        self.content[(addr % MEM_SIZE as u32) as usize] = val;
+    }
 
-        impl MemoryMapped for $mem_name {
-            fn read(&self, addr: u32) -> u32 {
-                self.0[(addr % MEM_SIZE as u32) as usize]
-            }
-
-            fn write(&mut self, addr: u32, val: u32) {
-                self.0[(addr % MEM_SIZE as u32) as usize] = val;
-            }
-
-            fn in_range(&self, addr: u32) -> bool {
-                (addr >> 25) == $msb
-            }
-        }
-    };
+    pub fn in_range(&self, addr: u32) -> bool {
+        (addr >> 10) == self.msb
+    }
 }
-
-map_memory!(IMem, 0);
-map_memory!(DMem, 1);
-map_memory!(Stack, 2);
-map_memory!(IOMem, 3);

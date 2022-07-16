@@ -6,3 +6,4 @@
 *.qck
 *.log
 /root/*
+.env

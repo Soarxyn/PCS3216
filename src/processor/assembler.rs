@@ -4,38 +4,38 @@ use std::{fs, str::FromStr};
 #[repr(u8)]
 #[derive(EnumString, FromRepr, Debug)]
 pub enum OpCodes {
-    IRQ,
-    LDA,
-    STA,
-    ADD,
-    SUB,
-    MUL,
-    DIV,
-    CMP,
-    NEG,
-    BEQ,
-    BGT,
-    BLT,
-    BHS,
-    BMI,
-    BVS,
-    BHI,
-    PSH,
-    POP,
-    JAL,
-    JMP,
-    AND,
-    ORR,
-    NOT,
-    XOR,
-    LSL,
-    LSR,
-    ASL,
-    ASR,
-    ROL,
-    ROR,
-    RCL,
-    RCR,
+    IRQ, //0
+    LDA, //1
+    STA, //2
+    ADD, //3
+    SUB, //4
+    MUL, //5
+    DIV, //6
+    CMP, //7
+    NEG, //8
+    BEQ, //9
+    BGT, //10
+    BLT, //11
+    BHS, //12
+    BMI, //13
+    BVS, //14
+    BHI, //15
+    PSH, //16
+    POP, //17
+    JAL, //18
+    JMP, //19
+    AND, //20
+    ORR, //21
+    NOT, //22
+    XOR, //23
+    LSL, //24
+    LSR, //25
+    ASL, //26
+    ASR, //27
+    ROL, //28
+    ROR, //29
+    RCL, //30
+    RCR, //31
 }
 
 #[repr(u8)]

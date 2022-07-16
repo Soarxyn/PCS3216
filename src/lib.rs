@@ -8,6 +8,7 @@ pub mod processor;
 use processor::{
     assembler::{assemble, OpCodes},
     linker::link,
+    cpu::{CPU, CPUState}
 };
 use std::fs;
 
@@ -53,5 +54,7 @@ fn sisprog(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(assemble, m)?)?;
     m.add_function(wrap_pyfunction!(link, m)?)?;
     m.add_function(wrap_pyfunction!(print_debug, m)?)?;
+    m.add_class::<CPU>()?;
+    m.add_class::<CPUState>()?;
     Ok(())
 }
