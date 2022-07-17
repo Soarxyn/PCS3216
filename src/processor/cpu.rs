@@ -23,6 +23,7 @@ pub struct CPU {
     #[pyo3(get, set)] pub z: bool,
     #[pyo3(get, set)] pub c: bool,
     #[pyo3(get, set)] pub v: bool,
+    #[pyo3(get, set)] pub i: bool,
     #[pyo3(get, set)] pub state: CPUState,
     pub last_state: CPUState,
     pub mem: Vec<MemoryCache>,
@@ -43,6 +44,7 @@ impl CPU {
             z: false,
             c: false,
             v: false,
+            i: false,
             state: CPUState::IDLE,
             last_state: CPUState::IDLE,
             mem: vec![
@@ -127,7 +129,7 @@ impl CPU {
     pub fn process_instruction(&mut self, instr: u32) -> bool {
         let opcode: OpCodes = OpCodes::from_repr(((instr >> 27) & 0x1F) as u8).unwrap_or(OpCodes::ADD);
         let irq_field = instr >> 25 & 0x3;
-        let argument = instr & 0x07FFFFFF;
+        let mut argument = instr & 0x07FFFFFF;
 
         println!("{:?} {:?}", opcode, argument);
 
@@ -141,6 +143,7 @@ impl CPU {
                 self.z = false;
                 self.c = false;
                 self.v = false;
+                self.i = false;
 
                 false
             }
@@ -162,8 +165,9 @@ impl CPU {
             }
 
             OpCodes::IRQ if irq_field == 3 => {
-                let set_flags = argument & 0xF;
+                let set_flags = argument & 0x1F;
 
+                self.i = (set_flags & 0x10) >> 4 == 1;
                 self.z = (set_flags & 0x8) >> 3 == 1;
                 self.n = (set_flags & 0x4) >> 2 == 1;
                 self.c = (set_flags & 0x2) >> 1 == 1;
@@ -173,12 +177,20 @@ impl CPU {
             }
 
             OpCodes::LDA => {
+                if self.i {
+                    argument = self.read_memory(argument).expect("Error while reading memory");
+                }
+
                 self.acc = self.read_memory(argument).expect("Error while reading memory");
 
                 false
             }
 
             OpCodes::STA => {
+                if self.i {
+                    argument = self.read_memory(argument).expect("Error while reading memory");
+                }
+
                 self.write_memory(argument, self.acc).expect("Error while writing memory");
 
                 false

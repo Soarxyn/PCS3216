@@ -9,31 +9,23 @@ def sign_extend(num: int) -> int:
 
 if __name__ == "__main__":
     processor = CPU()
-    print_debug("ex.fita")
-    # processor.write_many(
-    #     0x400, [
-    #         0x61656c50, # 400
-    #         0x202c6573, # 401
-    #         0x65746e65, # 402
-    #         0x20612072, # 403
-    #         0x626d756e, # 404
-    #         0x203a7265, # 405
-    #         0x00000000, # 406
-    #         0x00000030, # 407
-    #     ]
-    # )
 
-    # processor.write_many(
-    #     0x0, [
-    #         0x02000400, # 00 PRINT 400
-    #         0x04000408, # 01 READ 408
-    #         0x08000408, # 02 LDA 408
-    #         0x20000407, # 03 SUB 407
-    #         0x10000408, # 04 STA 408
-    #         0x28000408, # 05 MUL 408
-    #         0x00000000,
-    #     ]
-    # )
+    processor.write_many(
+        0x400, [
+            0x1,
+            0x402,
+            0x0
+        ]
+    )
+
+    processor.write_many(
+        0x0, [
+            0x08000400, # LDA 400
+            0x18000400, # ADD 400
+            0x06000010, # SET 10000
+            0x10000401, # STA 402i
+        ]
+    )
     # processor.write_many(0x400, [0, 1, 2])
     # processor.write_many(0x0, [
     #         0x08000404, # 0  LDA 404
@@ -61,7 +53,7 @@ if __name__ == "__main__":
 
     while True:
         processor.cycle()
-        # print(f"ACC: {sign_extend(processor.acc)}\nPC: {processor.pc}\nLA: {processor.la}\nZNCV: {processor.z} {processor.n} {processor.c} {processor.v}\n")
+        print(f"ACC: {sign_extend(processor.acc)}\nPC: {processor.pc}\nLA: {processor.la}\nIZNCV: {processor.i} {processor.z} {processor.n} {processor.c} {processor.v}\n")
 
         if processor.state == CPUState.IDLE:
             break
@@ -74,6 +66,7 @@ if __name__ == "__main__":
             the_string = processor.get_print()
             print(bytes(the_string).decode('utf-8'))
 
+    print(processor.read_memory(0x402))
 #     assemblyResult = assemble("ex.qck", "ex.bdc")[1]
 #     if assemblyResult == "Assembly successful":
 #         linkingResult = link(["ex.bdc"], "ex.fita")[1]
