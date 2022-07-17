@@ -8,8 +8,8 @@ pub enum CPUState {
     IDLE,
     STEP,
     RUNNING,
-    READ,
-    WRITE
+    INPUT,
+    OUTPUT
 }
 
 #[pyclass]
@@ -59,7 +59,7 @@ impl CPU {
             CPUState::STEP => {
                 let instr = self.read_memory(self.pc).expect("Error while reading memory");
                 let halted = self.process_instruction(instr);
-                self.pc += 4;
+                self.pc += 1;
 
                 if halted {
                     self.state = CPUState::IDLE;
@@ -72,7 +72,7 @@ impl CPU {
                 loop {
                     let instr = self.read_memory(self.pc).expect("Error while reading memory");
                     let halted = self.process_instruction(instr);
-                    self.pc += 4;
+                    self.pc += 1;
 
                     if halted {
                         break;
@@ -87,7 +87,7 @@ impl CPU {
     }
 
     pub fn feed_read(&mut self, val: u32) -> PyResult<()> {
-        if self.state != CPUState::READ {
+        if self.state != CPUState::INPUT {
             return Err(PyTypeError::new_err(format!("Invalid Request: Trying to feed a read when not in read state.")));
         }
 
@@ -97,28 +97,46 @@ impl CPU {
         Ok(())
     }
 
-    pub fn get_print(&mut self) -> PyResult<u32> {
-        if self.state != CPUState::WRITE {
+    pub fn get_print(&mut self) -> PyResult<Vec<u8>> {
+        if self.state != CPUState::OUTPUT {
             return Err(PyTypeError::new_err(format!("Invalid Request: Trying to obtain a write when not in read state.")));
+        }
+
+        let mut string_end = false;
+        let mut result: Vec<u8> = Vec::new();
+
+        while !string_end {
+            let read_byte = self.read_memory(self.saved_reg).expect("Error while reading memory").to_le_bytes();
+
+            for byte in read_byte {
+                result.push(byte);
+
+                if byte == 0x00 {
+                    string_end = true;
+                }
+            }
+
+            self.saved_reg += 1;
         }
 
         self.state = self.last_state;
 
-        Ok(self.saved_reg)
+        Ok(result)
     }
 
     pub fn process_instruction(&mut self, instr: u32) -> bool {
         let opcode: OpCodes = OpCodes::from_repr(((instr >> 27) & 0x1F) as u8).unwrap_or(OpCodes::ADD);
+        let irq_field = instr >> 25 & 0x3;
         let argument = instr & 0x07FFFFFF;
 
         println!("{:?} {:?}", opcode, argument);
 
         match opcode {
-            OpCodes::IRQ if instr >> 27 == 0 && instr & 0x1 == 0 => {
+            OpCodes::IRQ if irq_field == 0 && instr & 0x1 == 0 => {
                 true
             }
             
-            OpCodes::IRQ if instr >> 27 == 0 && instr & 0x1 == 1 => {
+            OpCodes::IRQ if irq_field == 0 && instr & 0x1 == 1 => {
                 self.n = false;
                 self.z = false;
                 self.c = false;
@@ -127,23 +145,23 @@ impl CPU {
                 false
             }
 
-            OpCodes::IRQ if instr >> 27 == 1 => {
-                self.saved_reg = self.read_memory(argument).expect("Error while reading memory"); /* Saved register has memory content to be printed. */
+            OpCodes::IRQ if irq_field == 1 => {
+                self.saved_reg = argument & 0x1FFFFFF; /* Saved register has starting memory position to be read. */
                 self.last_state = self.state;
-                self.state = CPUState::READ;
+                self.state = CPUState::OUTPUT;
 
                 false
             }
 
-            OpCodes::IRQ if instr >> 27 == 2 => {
-                self.saved_reg = argument; /* Saved register has memory position to be overwritten. */
+            OpCodes::IRQ if irq_field == 2 => {
+                self.saved_reg = argument & 0x1FFFFFF; /* Saved register has memory position to be overwritten. */
                 self.last_state = self.state;
-                self.state = CPUState::WRITE;
+                self.state = CPUState::INPUT;
 
                 false
             }
 
-            OpCodes::IRQ if instr >> 27 == 3 => {
+            OpCodes::IRQ if irq_field == 3 => {
                 let set_flags = argument & 0xF;
 
                 self.z = (set_flags & 0x8) >> 3 == 1;
@@ -219,7 +237,7 @@ impl CPU {
 
             OpCodes::BEQ => {
                 if self.z == true {
-                    self.pc = argument;
+                    self.pc = argument - 1;
                 }
 
                 false
@@ -227,7 +245,7 @@ impl CPU {
 
             OpCodes::BGT => {
                 if (self.z == false) && (self.v == self.n) {
-                    self.pc = argument;
+                    self.pc = argument - 1;
                 }
 
                 false
@@ -235,7 +253,7 @@ impl CPU {
 
             OpCodes::BLT => {
                 if self.v != self.n {
-                    self.pc = argument;
+                    self.pc = argument - 1;
                 }
 
                 false
@@ -243,7 +261,7 @@ impl CPU {
 
             OpCodes::BHS => {
                 if self.c == true {
-                    self.pc = argument;
+                    self.pc = argument - 1;
                 }
 
                 false
@@ -251,7 +269,7 @@ impl CPU {
 
             OpCodes::BMI => {
                 if self.n == true {
-                    self.pc = argument;
+                    self.pc = argument - 1;
                 }
 
                 false
@@ -259,7 +277,7 @@ impl CPU {
 
             OpCodes::BVS => {
                 if self.v == true {
-                    self.pc = argument;
+                    self.pc = argument - 1;
                 }
 
                 false
@@ -267,35 +285,37 @@ impl CPU {
 
             OpCodes::BHI => {
                 if self.c == true && self.z == false {
-                    self.pc = argument;
+                    self.pc = argument - 1;
                 }
 
                 false
             }
             
             OpCodes::PSH => {
-                self.write_memory(self.sp, self.acc).expect("Error while writing memory");
-                self.sp += 4;
+                let content = self.read_memory(argument).expect("Error while writing memory");
+                self.write_memory(self.sp, content).expect("Error while writing memory");
+                self.sp += 1;
 
                 false
             }
 
             OpCodes::POP => {
-                self.acc = self.read_memory(self.sp).expect("Error while reading memory");
-                self.sp -= 4;
+                let content = self.read_memory(self.sp).expect("Error while reading memory");
+                self.write_memory(argument, content).expect("Error while writing memory");
+                self.sp -= 1;
 
                 false
             }
 
             OpCodes::JAL => {
-                self.la = self.pc + 4;
-                self.pc = argument;
+                self.la = self.pc;
+                self.pc = argument - 1;
 
                 false
             }
             
             OpCodes::JMP => {
-                self.pc = argument;
+                self.pc = argument - 1;
 
                 false
             }
@@ -340,12 +360,50 @@ impl CPU {
                 false
             }
 
-            OpCodes::ASL => todo!(),
-            OpCodes::ASR => todo!(),
-            OpCodes::ROL => todo!(),
-            OpCodes::ROR => todo!(),
-            OpCodes::RCL => todo!(),
-            OpCodes::RCR => todo!(),
+            OpCodes::ASL => {
+                let msb = self.acc & 0x80000000;
+                self.acc = ((self.acc << argument) & 0x7FFFFFFF) | msb;
+
+                false
+            }
+
+            OpCodes::ASR => {
+                let lsr = (self.acc as i32) >> argument;
+                self.acc = lsr as u32;
+
+                false
+            }
+
+            OpCodes::ROR => {
+                self.acc = self.acc.rotate_right(argument);
+                
+                false
+            }
+
+            OpCodes::RCR => {
+                let mask: u32 = 0xFFFFFFFF >> (33 - argument);
+                let leading = (self.acc & mask) << (33 - argument);
+                let saved = self.acc & (1 << (argument - 1));
+                let carry_bit = if self.c { 1 << (32 - argument) } else { 0 }; 
+
+                self.acc >>= argument | carry_bit | leading;
+                self.c = saved != 0;
+
+
+                false
+            }
+            
+            OpCodes::CLZ => {
+                self.write_memory(argument, self.acc.leading_zeros()).expect("Error while writing memory");
+
+                false
+            }
+
+            OpCodes::RET => {
+                self.pc = self.la;
+
+                false
+            }
 
             _ => { false }
         }
@@ -376,7 +434,7 @@ impl CPU {
         
         for word in val {
             self.write_memory(current_addr, word)?;
-            current_addr += 4;
+            current_addr += 1;
         }
 
         Ok(())

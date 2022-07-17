@@ -32,10 +32,10 @@ pub enum OpCodes {
     LSR, //25
     ASL, //26
     ASR, //27
-    ROL, //28
-    ROR, //29
-    RCL, //30
-    RCR, //31
+    ROR, //28
+    RCR, //29
+    CLZ, //30
+    RET, //31
 }
 
 #[repr(u8)]
