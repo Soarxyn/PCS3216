@@ -259,11 +259,13 @@ pub fn link(breadcrumbs: Vec<&str>, out: Option<&str>) -> PyResult<(bool, String
                                                 None => return Err(format!("Missing declaration for label {} used at line {} in {}", label, i + 1, bdc)),
 
                                                 Some(field) => {
-                                                    if field.leading_zeros() < 5 {
-                                                        return Err("File too big!".to_owned());
+                                                    match field.leading_zeros() {
+                                                        0..=4 => return Err("File too big!".to_owned()),
+                                                        5..=6 => (),
+                                                        _ => return Err("Only data labels allowed for PRINT and READ instructions".to_owned()),
                                                     }
 
-                                                    buf.extend((u32::from(irq_type) << 25 | field).to_le_bytes().into_iter());
+                                                    buf.extend((u32::from(irq_type) << 25 | (field & 0x1FFFFFF)).to_le_bytes().into_iter());
                                                 }
                                             }
                                             3 => match u32::from_str_radix(label, 2) {

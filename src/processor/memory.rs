@@ -1,10 +1,9 @@
-
-pub const MEM_SIZE: usize = 1 << 10;
+pub const MEM_SIZE: usize = 1 << 16;
 
 #[derive(Clone)]
 pub struct MemoryCache {
     pub content: [u32; MEM_SIZE],
-    pub msb: u32
+    pub msb: u32,
 }
 
 impl MemoryCache {
@@ -17,6 +16,6 @@ impl MemoryCache {
     }
 
     pub fn in_range(&self, addr: u32) -> bool {
-        (addr >> 10) == self.msb
+        ((addr >> 16) & 0x3) == self.msb
     }
 }
