@@ -2,9 +2,10 @@ from textual.app import App
 from textual.reactive import Reactive
 from textual.widgets import Footer, Header
 
-from helpList import helpList
-from cmdLine import cmdLine
-from interface import interface
+from pythonLib.helpList import helpList
+from pythonLib.cmdLine import cmdLine
+from pythonLib.interface import interface
+from pythonLib.memoryApps import memoryApps
 
 class screen(App):
     show_help = Reactive(False)
@@ -38,3 +39,5 @@ class screen(App):
         homeGrid.add_row("row2", fraction= 1, max_size= 13, min_size= 3)
         homeGrid.add_column("col")
         homeGrid.place(interface(), cmdLine())
+        
+        memoryApps().addLoader()

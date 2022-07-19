@@ -10,9 +10,9 @@ from textual import events
 from textual.reactive import Reactive
 from textual.widget import Widget
 
-from memoryApps import memoryApps
-from interface import interface
-from codePeeker import codePeeker
+from pythonLib.memoryApps import memoryApps
+from pythonLib.interface import interface
+from pythonLib.codePeeker import codePeeker
 from sisprog import assemble, link
 
 class _cmdLine(Widget):
@@ -144,7 +144,7 @@ class _cmdLine(Widget):
         if len(args) == 1:
             self.printError("Faltam argumentos para " + args[0])  
         elif len(args) == 2:
-            if memoryApps().appList.count(args[1]) == 1:
+            if memoryApps().appsList.count(args[1]) == 1:
                 pass # rodar o codigo
             else:
                 self.printError("Arquivo não está na memória: " + args[1])
@@ -155,7 +155,7 @@ class _cmdLine(Widget):
         if len(args) == 1:
             self.printError("Faltam argumentos para " + args[0])  
         elif len(args) == 2:
-            if memoryApps().appList.count(args[1]) == 1:
+            if memoryApps().appsList.count(args[1]) == 1:
                 interface().changeMode("Simulation")
                 codePeeker("Simulation").setPath(args[1])
                 # rodar codigo linha a linha
@@ -168,15 +168,18 @@ class _cmdLine(Widget):
         if len(args) == 1:
             self.printError("Faltam argumentos para " + args[0])  
         elif len(args) == 2:
-            if os.path.exists("./root/" + args[1]):
-                if memoryApps().appList.count(args[1]) == 0:
-                    memoryApps().addApp(args[1])
-                    interface().refresher()
-                    self.printSuccess(args[1] + " adicionado na memória")
+            if args[1][-4:] == "fita":
+                if os.path.exists("./root/" + args[1]):
+                    if memoryApps().appsList.count(args[1]) == 0:
+                        memoryApps().addApp(args[1])
+                        interface().refresher()
+                        self.printSuccess(args[1] + " adicionado a memória")
+                    else:
+                        self.printError("Arquivo já carregado")
                 else:
-                    self.printError("Arquivo já carregado")
+                    self.printError("Arquivo inexistente: " + args[1])
             else:
-                self.printError("Arquivo inexistente: " + args[1])
+                self.printError("Só é possível fazer LOAD em arquivos '.fita'")
         else:
             self.printError("Argumentos demais: " + str(args[2:]))
     
@@ -184,12 +187,15 @@ class _cmdLine(Widget):
         if len(args) == 1:
             self.printError("Faltam argumentos para " + args[0])  
         elif len(args) == 2:
-            if memoryApps().appList.count(args[1]) == 1:
-                memoryApps().removeApp(args[1])
-                interface().refresher()
-                self.printSuccess(args[1] + " removido da memória")
+            if args[1] != "loader":
+                if memoryApps().appsList.count(args[1]) == 1:
+                    memoryApps().removeApp(args[1])
+                    interface().refresher()
+                    self.printSuccess(args[1] + " removido da memória")
+                else:
+                    self.printError("Arquivo não está na memória: " + args[1])
             else:
-                self.printError("Arquivo não está na memória: " + args[1])
+                self.printError("Não é possível descarregar o loader")
         else:
             self.printError("Argumentos demais: " + str(args[2:]))
     
@@ -223,12 +229,12 @@ class _cmdLine(Widget):
             self.printError("Faltam argumentos para " + args[0])
         elif len(args) == 2:
             if os.path.exists("./root/" + args[1]):
-                result = assemble("./root/" + args[1])
-                if result == "Assembly successful":
+                result = assemble("./root/" + args[1], "./root/" + args[1][:-3] + "bdc")
+                if result[0]:
                     self.printSuccess("Assembled " + args[1])
                     interface().refresher()
                 else:
-                    self.printError(result)
+                    self.printError(result[1])
             else:
                 self.printError("Arquivo inexistente: " + args[1])
         elif len(args) == 3:
@@ -246,11 +252,11 @@ class _cmdLine(Widget):
                 if args.index("-o") == 2:
                     if os.path.exists("./root/" + args[1]):
                         result = assemble("./root/" + args[1], "./root/" + args[3])
-                        if result == "Assembly successful":
+                        if result[0]:
                             self.printSuccess("Assembled " + args[1] + " into " + args[3])
                             interface().refresher()
                         else:
-                            self.printError(result)
+                            self.printError(result[1])
                     else:
                         self.printError("Arquivo inexistente: " + args[1])
                 else:
@@ -272,12 +278,12 @@ class _cmdLine(Widget):
             if len(pathError) != 0:
                 self.printError("Arquivos não encontrados: " + str(pathError))
             else:
-                result = link(toLink)
-                if result == "Linking successful":
+                result = link(toLink, "./root/" + args[1][:-3] + "fita")
+                if result[0]:
                     self.printSuccess("Linked " + str(args[1:]))
                     interface().refresher()
                 else:
-                    self.printError(result)
+                    self.printError(result[1])
         else:
             if args.index("-o") == len(args) - 2:
                 toLink = list()
@@ -291,11 +297,11 @@ class _cmdLine(Widget):
                     self.printError("Arquivos não encontrados: " + str(pathError))
                 else:
                     result = link(toLink, "./root/" + args[-1])
-                    if result == "Linking successful":
+                    if result[0]:
                         self.printSuccess("Linked " + str(args[1:-2]) + " to " + args[-1])
                         interface().refresher()
                     else:
-                        self.printError(result)
+                        self.printError(result[1])
             else:
                 self.printError("Posicao errada do argumento '-o'")
     

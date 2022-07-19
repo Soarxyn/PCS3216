@@ -1,8 +1,7 @@
-/__pycache__
+/src/pythonLib/__pycache__
 /target
 /sisprog.*
 *.bdc
-*.fita
 *.qck
 *.log
 /root/*
