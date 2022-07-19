@@ -38,5 +38,3 @@ class screen(App):
         homeGrid.add_row("row2", fraction= 1, max_size= 13, min_size= 3)
         homeGrid.add_column("col")
         homeGrid.place(interface(), cmdLine())
-
-screen.run(log="textual.log", log_verbosity=2, title="PatinhOS :duck:")

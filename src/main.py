@@ -1,5 +1,6 @@
-from random import getstate
 from sisprog import CPUState, cycle, read_memory, write_many, write_memory, get_acc, get_c, get_la, get_n, get_p, get_pc, get_print, feed_read, get_saved_reg, get_sp, get_state,  get_v, get_z, parse_binary, execute
+
+from pythonLib.screen import screen
 
 def sign_extend(num: int) -> int:
     if num < 0:
@@ -9,70 +10,72 @@ def sign_extend(num: int) -> int:
     return (num & (sign_bit - 1)) - (num & sign_bit) 
 
 if __name__ == "__main__":
-
-    ndata, ninstr, data, instr = parse_binary("../loader.fita")
-
-    write_many(
-        0x0,
-        instr
-    )
-
-    write_many(
-        0x10000,
-        data
-    )
-
-    ndata, ninstr, data, instr = parse_binary("../div.fita")
-
-    write_many(
-        0x10000, [
-            0x32,
-            0xb,
-            0x30000,
-            ninstr,
-            ndata,
-            0x1000b,
-            0x32,
-        ]
-    )
-
-    write_many(
-        0x30000,
-        data + instr
-    )
-
-    execute(0x0, True)
-    while True:
-        cycle()      
-
-        if get_state() == CPUState.IDLE:
-            break
-
-        if get_state() == CPUState.INPUT:
-            a = input("")
-            feed_read(int.from_bytes(a.encode('utf-8'), 'little'))
-
-        if get_state() == CPUState.OUTPUT:
-            the_string = get_print()
-            print(bytes(the_string).decode('utf-8'))
-
-    execute(0x32, True)
-    while True:
-        cycle()      
-
-        if get_state() == CPUState.IDLE:
-            break
-
-        if get_state() == CPUState.INPUT:
-            a = input("")
-            feed_read(int.from_bytes(a.encode('utf-8'), 'little'))
-
-        if get_state() == CPUState.OUTPUT:
-            the_string = get_print()
-            print(bytes(the_string).decode('utf-8'))
     
-    for i in range(0x10000, 0x10020):
-        print(f"{i:x}: {read_memory(i)}")
+    screen.run(log="textual.log", log_verbosity=2, title="PatinhOS :duck:")
+
+    # ndata, ninstr, data, instr = parse_binary("../loader.fita")
+
+    # write_many(
+    #     0x0,
+    #     instr
+    # )
+
+    # write_many(
+    #     0x10000,
+    #     data
+    # )
+
+    # ndata, ninstr, data, instr = parse_binary("../div.fita")
+
+    # write_many(
+    #     0x10000, [
+    #         0x32,
+    #         0xb,
+    #         0x30000,
+    #         ninstr,
+    #         ndata,
+    #         0x1000b,
+    #         0x32,
+    #     ]
+    # )
+
+    # write_many(
+    #     0x30000,
+    #     data + instr
+    # )
+
+    # execute(0x0, True)
+    # while True:
+    #     cycle()      
+
+    #     if get_state() == CPUState.IDLE:
+    #         break
+
+    #     if get_state() == CPUState.INPUT:
+    #         a = input("")
+    #         feed_read(int.from_bytes(a.encode('utf-8'), 'little'))
+
+    #     if get_state() == CPUState.OUTPUT:
+    #         the_string = get_print()
+    #         print(bytes(the_string).decode('utf-8'))
+
+    # execute(0x32, True)
+    # while True:
+    #     cycle()      
+
+    #     if get_state() == CPUState.IDLE:
+    #         break
+
+    #     if get_state() == CPUState.INPUT:
+    #         a = input("")
+    #         feed_read(int.from_bytes(a.encode('utf-8'), 'little'))
+
+    #     if get_state() == CPUState.OUTPUT:
+    #         the_string = get_print()
+    #         print(bytes(the_string).decode('utf-8'))
+    
+    # for i in range(0x10000, 0x10020):
+    #     print(f"{i:x}: {read_memory(i)}")
 
     # for i in range(0x20000000, 0x20000030):
     #     print(f"{i:x}: {processor.read_memory(i)}")
