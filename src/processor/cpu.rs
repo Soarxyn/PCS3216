@@ -168,7 +168,7 @@ pub unsafe fn write_many(addr: u32, val: Vec<u32>) -> PyResult<()> {
 }
 
 pub unsafe fn process_instruction(instr: u32) -> bool {
-    let opcode: OpCodes = OpCodes::from_repr(((instr >> 18) & 0x3FFF) as u8).unwrap_or(OpCodes::ADD);
+    let opcode: OpCodes = OpCodes::from_repr(((instr >> 18) & 0x3FFF) as u16).unwrap_or(OpCodes::ADD);
     let irq_field = (instr >> 16) & 0x3;
     let mut argument = instr & 0x3FFFF;
 

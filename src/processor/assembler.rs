@@ -1,7 +1,7 @@
 use pyo3::prelude::*;
 use std::{fs, str::FromStr};
 
-#[repr(u8)]
+#[repr(u16)]
 #[derive(EnumString, FromRepr, Debug)]
 pub enum OpCodes {
     IRQ, //0

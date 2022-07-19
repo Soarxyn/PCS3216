@@ -31,11 +31,11 @@ fn print_debug(fita: &str) -> PyResult<()> {
                     });
                     while let Some(chunk) = chunks.next() {
                         let line = u32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);
-                        let instr = line >> 27;
+                        let instr = line >> 18;
                         println!(
-                            "{:?}  {:027b}",
-                            OpCodes::from_repr(instr as u8).unwrap(),
-                            line % (1 << 27)
+                            "{:?}  {:018b}",
+                            OpCodes::from_repr(instr as u16).unwrap(),
+                            line % (1 << 18)
                         );
                     }
                 }

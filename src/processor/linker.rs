@@ -50,12 +50,12 @@ pub fn link(breadcrumbs: Vec<&str>, out: Option<&str>) -> PyResult<(bool, String
                     if labels
                         .insert(
                             label.to_owned(),
-                            1 << 25
+                            1 << 16
                                 | match u32::try_from(buf.len() >> 2) {
                                     Err(_) => return Err("File too big!".to_owned()),
 
                                     Ok(v) => {
-                                        if v.leading_zeros() < 7 {
+                                        if v.leading_zeros() < 16 {
                                             return Err("File too big!".to_owned());
                                         }
 
@@ -91,12 +91,12 @@ pub fn link(breadcrumbs: Vec<&str>, out: Option<&str>) -> PyResult<(bool, String
                     if labels
                         .insert(
                             label.to_owned(),
-                            1 << 25
+                            1 << 16
                                 | match u32::try_from(buf.len() >> 2) {
                                     Err(_) => return Err("File too big!".to_owned()),
 
                                     Ok(v) => {
-                                        if v.leading_zeros() < 7 {
+                                        if v.leading_zeros() < 16 {
                                             return Err("File too big!".to_owned());
                                         }
 
@@ -174,7 +174,7 @@ pub fn link(breadcrumbs: Vec<&str>, out: Option<&str>) -> PyResult<(bool, String
             Err(_) => return Err("File too big!".to_owned()),
 
             Ok(v) => {
-                if v.leading_zeros() < 7 {
+                if v.leading_zeros() < 16 {
                     return Err("File too big!".to_owned());
                 }
 
@@ -202,7 +202,7 @@ pub fn link(breadcrumbs: Vec<&str>, out: Option<&str>) -> PyResult<(bool, String
         Err(_) => return Ok((false, "File too big!".to_owned())),
 
         Ok(v) => {
-            if v.leading_zeros() < 7 {
+            if v.leading_zeros() < 16 {
                 return Ok((false, "File too big!".to_owned()));
             }
 
@@ -260,23 +260,23 @@ pub fn link(breadcrumbs: Vec<&str>, out: Option<&str>) -> PyResult<(bool, String
 
                                                 Some(field) => {
                                                     match field.leading_zeros() {
-                                                        0..=4 => return Err("File too big!".to_owned()),
-                                                        5..=6 => (),
+                                                        0..=14 => return Err("File too big!".to_owned()),
+                                                        15..=16 => (),
                                                         _ => return Err("Only data labels allowed for PRINT and READ instructions".to_owned()),
                                                     }
 
-                                                    buf.extend((u32::from(irq_type) << 25 | (field & 0x1FFFFFF)).to_le_bytes().into_iter());
+                                                    buf.extend((u32::from(irq_type) << 16 | (field & 0xFFFF)).to_le_bytes().into_iter());
                                                 }
                                             }
                                             3 => match u32::from_str_radix(label, 2) {
                                                 Err(_) => return Err(format!("Expected binary number as argument at line {}\n\tfound {} instead", i + 1, token)),
 
                                                 Ok(field) => {
-                                                    if field.leading_zeros() < 5 {
+                                                    if field.leading_zeros() < 14 {
                                                         return Err("File too big!".to_owned());
                                                     }
 
-                                                    buf.extend((3 << 25 | field).to_le_bytes().into_iter());
+                                                    buf.extend((3 << 16 | field).to_le_bytes().into_iter());
                                                 }
                                             }
                                             0 | 4 => return Err(format!("Unexpected argument at line {}\n\t{}", i + 1, label)),
@@ -293,11 +293,11 @@ pub fn link(breadcrumbs: Vec<&str>, out: Option<&str>) -> PyResult<(bool, String
                                     None => return Err(format!("Label {} used at line {} in {} not defined in object files", arg, i + 1, bdc)),
 
                                     Some(field) => {
-                                        if field.leading_zeros() < 5 {
+                                        if field.leading_zeros() < 14 {
                                             return Err("File too big!".to_owned());
                                         }
 
-                                        buf.extend((u32::from(op as u8) << 27 | field).to_le_bytes().into_iter());
+                                        buf.extend((u32::from(op as u8) << 18 | field).to_le_bytes().into_iter());
                                     }
                                 }
                             }

@@ -9,11 +9,16 @@ def sign_extend(num: int) -> int:
 
 if __name__ == "__main__":
 
-    ndata, ninstr, data, instr = parse_binary("div.fita")
+    ndata, ninstr, data, instr = parse_binary("../ex.fita")
 
     write_many(
         0x0,
-        data + instr
+        instr
+    )
+
+    write_many(
+        0x10000,
+        data
     )
 
     # processor.write_many(
@@ -40,11 +45,11 @@ if __name__ == "__main__":
     #     ]
     # )
 
-    execute(0x8, True)
+    execute(0x0, True)
     while True:
         cycle()
 
-        print(get_pc())
+        print(get_state())
 
         if get_state() == CPUState.IDLE:
             break
