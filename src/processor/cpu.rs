@@ -116,6 +116,7 @@ pub unsafe fn cycle() -> PyResult<()> {
                 PC += 1;
 
                 if halted {
+                    STATE = CPUState::IDLE;
                     break;
                 }
             }
