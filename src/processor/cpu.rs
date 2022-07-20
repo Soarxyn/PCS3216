@@ -119,6 +119,9 @@ pub unsafe fn cycle() -> PyResult<()> {
                     STATE = CPUState::IDLE;
                     break;
                 }
+                if STATE == CPUState::INPUT || STATE == CPUState::OUTPUT {
+                    break;
+                }
             }
 
             Ok(())
@@ -197,7 +200,7 @@ pub unsafe fn process_instruction(instr: u32) -> bool {
         }
 
         OpCodes::IRQ if irq_field == 2 => {
-            SAVED_REG = argument; /* Saved register has memory position to be overwritten. */
+            SAVED_REG = argument & 0xFFFF | 0x10000; /* Saved register has memory position to be overwritten. */
             LAST_STATE = STATE;
             STATE = CPUState::INPUT;
 

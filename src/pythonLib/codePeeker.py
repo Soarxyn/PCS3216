@@ -14,19 +14,26 @@ class _codePeeker(Widget):
     _instance = None
     
     path = Reactive("")
+    rPath = ""
     firstLine = Reactive(1)
+    activeLine = Reactive(0)
+    startLine = 0
     lineCount = 1
     height = 1
     lastLine = 2
     blankText = Text("Rode ").append("Peek ", style= Style(bold= True)).append("arquivo ", style= Style(bold= True, italic= True)).append("para\n    ver um arquivo")
     
-    def setPath(self, path: str):
+    def setPath(self, path: str) -> bool:
         self.path = "./root/" + path
+        self.rPath = path
         self.firstLine = 1
-        with open(self.path, 'r') as fp:
-            for self.lineCount, line in enumerate(fp):
-                pass
-        self.lineCount += 1 # Started on 0
+        if os.path.exists(self.path):
+            with open(self.path, 'r') as fp:
+                for self.lineCount, line in enumerate(fp):
+                    if line == "BEGIN\n":
+                        self.startLine = self.lineCount
+                    pass
+            self.lineCount += 1 # Started on 0
     
     def render(self) -> RenderableType:
         self.height = int(3*os.get_terminal_size()[1]/4)
@@ -34,7 +41,9 @@ class _codePeeker(Widget):
         self.height = min(self.height, os.get_terminal_size()[1] - 3)
         self.height -= 7
         self.lastLine = self.firstLine + self.height
-        if os.path.exists(self.path):
+        if self.path == "":
+            codeOpen = Align.center(self.blankText, vertical= "middle")
+        elif os.path.exists(self.path):
             codeOpen = Syntax.from_path(
                 path= self.path,
                 line_range= [self.firstLine, self.lastLine],
@@ -42,12 +51,14 @@ class _codePeeker(Widget):
                 word_wrap= True,
                 indent_guides= True,
                 theme= "monokai",
+                highlight_lines= [self.activeLine]
             )
         else:
-            codeOpen = Align.center(self.blankText, vertical= "middle")
+            notFound = Text("Não foi encontrado o arquivo\n").append(self.rPath, style= Style(bold= True, italic= True))
+            codeOpen = Align.center(notFound, vertical= "middle")
             
         return Panel(codeOpen,
-                     title= self.path[7:],
+                     title= self.rPath,
                      border_style= Style(color= "bright_cyan"))
         
 def codePeeker(mode: str):

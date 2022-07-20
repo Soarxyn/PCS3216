@@ -13,7 +13,8 @@ from textual.widget import Widget
 from pythonLib.memoryApps import memoryApps
 from pythonLib.interface import interface
 from pythonLib.codePeeker import codePeeker
-from sisprog import assemble, link
+from pythonLib.memoryDump import memoryDump
+from sisprog import assemble, link, execute, CPUState, get_state, get_print, cycle, feed_read
 
 class _cmdLine(Widget):
     _instance = None
@@ -21,13 +22,14 @@ class _cmdLine(Widget):
     cmdHeight= 3
     line = Reactive(Text("cmd> "))
     cmdText = ""
-    cmdRight = ""
+    cmdSuffix = ""
     history = [""]
     printedHistory = list()
     y = 0
     x = 0
     errorStyle = Style(color= "red1", bold= True)
     goodStyle = Style(color= "green1", bold= True)
+    printStyle = Style(color= "cadet_blue", bold= True)
     
     validCommands = [
         "home",
@@ -42,8 +44,11 @@ class _cmdLine(Widget):
         "link",
         "assemble",
         "link",
+        "step",
+        "see",
     ]
     ignoreKeys = [
+        "ctrl",
         "ctrl+q",
         "ctrl+w",
         "ctrl+e",
@@ -71,6 +76,7 @@ class _cmdLine(Widget):
         "ctrl+m",
         "ctrl+@",
         "ctrl+delete",
+        "insert",
     ]
         
     def on_key(self, event: events.Key):
@@ -88,13 +94,15 @@ class _cmdLine(Widget):
                 self.cmdText = self.cmdText[:self.x] + self.validCommands[cmdNumber][self.x:] + self.cmdText[self.x:]
                 self.x += len(self.validCommands[cmdNumber][self.x:])
         elif event.key == "enter":
-            self.cmdText = self.cmdText + self.cmdRight
-            if (not self.cmdText.isspace()) and self.cmdText:
-                self.history.append(self.cmdText)
-                self.printedHistory.append(self.cmdText)
-                self.commands(self.cmdText.split())
+            if get_state() == CPUState.INPUT:
+                feed_read(int(self.cmdText))
+                self.printedHistory.append(Text(self.cmdText, style= Style(color= "medium_turquoise")))
+            else:
+                if (not self.cmdText.isspace()) and self.cmdText:
+                    self.history.append(self.cmdText)
+                    self.printedHistory.append(self.cmdText)
+                    self.commands(self.cmdText.split())
             self.cmdText = ""
-            self.cmdRight = ""
             self.y = 0
             self.x = 0
         elif event.key == "up":
@@ -116,7 +124,19 @@ class _cmdLine(Widget):
         else:
             self.cmdText = self.cmdText[:self.x] + event.key + self.cmdText[self.x:]
             self.x += 1
+        if get_state() == CPUState.OUTPUT:
+            toPrint = get_print()
+            try:
+                self.printExit(str(bytes(toPrint).decode('utf-8')))
+            except:
+                self.printExit(str(int.from_bytes(toPrint, 'little')))
+        interface().refresher()
         self.line = Text("cmd> ").append(self.cmdText[:self.x]).append("_", style= Style(blink= True)).append(self.cmdText[self.x:])
+        
+    def printExit(self, text: str):
+        self.printedHistory.append(
+            Text(text, style= self.printStyle)
+        )
         
     def printError(self, text: str):
         self.printedHistory.append(
@@ -145,7 +165,20 @@ class _cmdLine(Widget):
             self.printError("Faltam argumentos para " + args[0])  
         elif len(args) == 2:
             if memoryApps().appsList.count(args[1]) == 1:
-                pass # rodar o codigo
+                index = memoryApps().appsList.index(args[1])
+                instStart = memoryApps().appsPos[index][2]
+                execute(instStart, True)
+                while True:
+                    self.printSuccess(str(get_state()))
+                    if get_state() == CPUState.OUTPUT:
+                        self.printSuccess(str(get_state()))
+                    if get_state() == CPUState.INPUT:
+                        self.printSuccess(str(get_state()))
+                        break
+                    if get_state() == CPUState.IDLE:
+                        self.printSuccess(str(get_state()))
+                        break
+                    cycle()
             else:
                 self.printError("Arquivo não está na memória: " + args[1])
         else:
@@ -157,8 +190,11 @@ class _cmdLine(Widget):
         elif len(args) == 2:
             if memoryApps().appsList.count(args[1]) == 1:
                 interface().changeMode("Simulation")
-                codePeeker("Simulation").setPath(args[1])
-                # rodar codigo linha a linha
+                codePeeker("Simulation").setPath(args[1][:-4] + "qck")
+                codePeeker("Simulation").activeLine = codePeeker("Simulation").startLine+2
+                index = memoryApps().appsList.index(args[1])
+                instStart = memoryApps().appsPos[index][2]
+                execute(instStart, True)
             else:
                 self.printError("Arquivo não está na memória: " + args[1])
         else:
@@ -305,6 +341,29 @@ class _cmdLine(Widget):
             else:
                 self.printError("Posicao errada do argumento '-o'")
     
+    def cmdStep(self, args: iter):
+        if get_state() == CPUState.IDLE:
+            self.printError("A simulação já acabou")
+        elif len(args) == 1:
+            cycle()
+            codePeeker("Simulation").activeLine += 1
+            interface().refresher()
+        else:
+            self.printError("Argumentos demais: " + str(args[1:]))
+            
+    def cmdSee(self, args: iter):
+        if len(args) == 1:
+            self.printError("Uso: SEE (instruction, data, stack, io)")
+        elif len(args) == 2:
+            if memoryDump().pages.count(args[1]) == 1:
+                memoryDump().changePage(args[1])
+                memoryDump().firstLine = 0
+                interface().refresher()
+            else:
+                self.printError("Não há memória " + args[1])
+        else:
+            self.printError("Argumentos demais: " + str(args[2:]))
+    
     def commands(self, cmd: iter):
         cmd[0] = cmd[0].lower()
         if self.validCommands.count(cmd[0]) == 0:
@@ -329,6 +388,10 @@ class _cmdLine(Widget):
             self.cmdAssemble(cmd)
         elif cmd[0] == "link":
             self.cmdLink(cmd)
+        elif cmd[0] == "step":
+            self.cmdStep(cmd)
+        elif cmd[0] == "see":
+            self.cmdSee(cmd)
                 
     def on_focus(self):
         self.line = Text("cmd> ").append(self.cmdText).append("_", style=Style(blink=True))

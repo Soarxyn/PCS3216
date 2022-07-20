@@ -9,16 +9,16 @@ from textual.reactive import Reactive
 from textual.widget import Widget
 from textual import events
 
-from folderOpen import folderOpen
-from memoryApps import memoryApps
-from codePeeker import codePeeker
-from cpuVariables import cpuVariables
-from memoryDump import memoryDump
+from pythonLib.folderOpen import folderOpen
+from pythonLib.memoryApps import memoryApps
+from pythonLib.codePeeker import codePeeker
+from pythonLib.cpuVariables import cpuVariables
+from pythonLib.memoryDump import memoryDump
 
 class _interface(Widget):
     _instance = None
         
-    actualMode = Reactive("Simulation")
+    actualMode = Reactive("Home")
     layout = Reactive(Layout())
     i = 0
 
@@ -26,36 +26,50 @@ class _interface(Widget):
         self.actualMode = mode
         
     def refresher(self):
+        cpuVariables().refresh()
+        memoryDump().refresh()
         folderOpen().updater()
         self.layout = ""
         self.layout = Layout()
 
     def on_mouse_scroll_down(self, position: events.MouseScrollDown):
+        width = os.get_terminal_size()[0]
         if self.actualMode == "Home":
-            if position.x > os.get_terminal_size()[0]*2/3:
+            if position.x > width*2/3:
                 if codePeeker("Home").lastLine < codePeeker("Home").lineCount:
                     codePeeker("Home").firstLine += 1
                     codePeeker("Home").lastLine += 1
                     interface().refresher()
         else:
-            if position.x < os.get_terminal_size()[0]/3:
+            if position.x < width/3:
                 if codePeeker("Simulation").lastLine < codePeeker("Simulation").lineCount:
                     codePeeker("Simulation").firstLine += 1
                     codePeeker("Simulation").lastLine += 1
                     interface().refresher()
+            elif position.x > width*2/3:
+                if memoryDump().lastLine < 0x10000-1:
+                    memoryDump().firstLine += 1
+                    memoryDump().lastLine += 1
+                    interface().refresher()
     
     def on_mouse_scroll_up(self, position: events.MouseScrollDown):
+        width = os.get_terminal_size()[0]
         if self.actualMode == "Home":
-            if position.x > os.get_terminal_size()[0]*2/3:
+            if position.x > width*2/3:
                 if codePeeker("Home").firstLine > 1:
                     codePeeker("Home").firstLine -= 1
                     codePeeker("Home").lastLine -= 1
                     interface().refresher()
         else:
-            if position.x < os.get_terminal_size()[0]/3:
+            if position.x < width/3:
                 if codePeeker("Simulation").firstLine > 1:
                     codePeeker("Simulation").firstLine -= 1
                     codePeeker("Simulation").lastLine -= 1
+                    interface().refresher()
+            elif position.x > width*2/3:
+                if memoryDump().firstLine > 1:
+                    memoryDump().firstLine -= 1
+                    memoryDump().lastLine -= 1
                     interface().refresher()
         
     def render(self) -> RenderableType:

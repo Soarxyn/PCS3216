@@ -15,7 +15,7 @@ class screen(App):
         await self.bind("ctrl+c", "quit", "Saída  ")
     
     def watch_show_help(self, show_help: bool):
-        self.helpBar.animate("layout_offset_x", 0 if show_help else 40)
+        self.helpBar.animate("layout_offset_x", 0 if show_help else 52)
         
     def action_toggle_help(self):
         self.show_help = not self.show_help
@@ -29,9 +29,9 @@ class screen(App):
         await self.view.dock(footer, edge="bottom", size=1) # Adiciona o rodape
         
         self.helpBar = helpList() # Cria uma barra
-        await self.view.dock(self.helpBar, edge="right", size=40, z=1)
+        await self.view.dock(self.helpBar, edge="right", size=52, z=1)
         
-        self.helpBar.layout_offset_x = 40
+        self.helpBar.layout_offset_x = 52
 
         homeGrid = await self.view.dock_grid()
         

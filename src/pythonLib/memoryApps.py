@@ -7,7 +7,7 @@ from rich.tree import Tree
 from textual.reactive import Reactive
 from textual.widget import Widget
 
-from sisprog import parse_binary, write_many, execute, cycle, get_state, CPUState, feed_read, get_print
+from sisprog import parse_binary, write_many, execute, cycle, cycle
 
 class _memoryApps(Widget):
     _instance = None
@@ -81,20 +81,8 @@ class _memoryApps(Widget):
                 0x30000,
                 data + inst
             )
-            execute(0x0, True)
-            while True:
-                cycle()      
-
-                if get_state() == CPUState.IDLE:
-                    break
-
-                if get_state() == CPUState.INPUT:
-                    a = input("")
-                    feed_read(int.from_bytes(a.encode('utf-8'), 'little'))
-
-                if get_state() == CPUState.OUTPUT:
-                    the_string = get_print()
-                    print(bytes(the_string).decode('utf-8'))
+            execute(0x0, False)
+            cycle()
             self.apps = Tree("Memória")
             for i in range(len(self.appsList)):
                 self.apps.add(self.appsList[i])
