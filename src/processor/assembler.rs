@@ -36,6 +36,7 @@ pub enum OpCodes {
     RCR, //29
     CLZ, //30
     RET, //31
+    REM, //32
 }
 
 #[repr(u8)]
@@ -381,7 +382,11 @@ pub fn assemble(in_asm: &str, breadcrumb: Option<&str>) -> PyResult<(bool, Strin
                                     PseudoOps::EXTERN => match tokens.next() {
                                         None => return Err(format!("Expected label after EXTERN at line {}", i + 1)),
 
-                                        Some(label) => buf.push_str(label),
+                                        Some(label) => {
+                                            buf.push_str(label);
+                                            buf.push('\n');
+                                            header_len += 1;
+                                        }
                                     }
                                     _ => return Err(format!("Expected BEGIN or EXTERN statement or label at line {}\n\tfound {} instead", i + 1, token))
                                 }

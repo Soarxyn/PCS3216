@@ -465,6 +465,14 @@ pub unsafe fn process_instruction(instr: u32) -> bool {
             false
         }
 
+        OpCodes::REM => {
+            let operand = read_memory(argument).expect("Error while reading memory");
+
+            ACC = ACC % operand;
+
+            false
+        }
+
         _ => false,
     }
 }
