@@ -17,7 +17,7 @@ class helpList(Widget):
         ["[b]DELETE [i]arquivo[/]", "Apaga [i]arquivo[/i] da pasta [b]src[/]"],
         ["[b]CLEAR[/]", "Limpa a saída do terminal"],
         ["[b]HOME[/]", "Volta para tela inicial"],
-        ["[b]RUN [i]arquivo[/]", "Roda [i]arquivo[/i] de uma vez"],
+        # ["[b]RUN [i]arquivo[/]", "Roda [i]arquivo[/i] de uma vez"],
         ["[b]SIMULATE [i]arquivo[/]", "Simula [i]arquivo[/i] passo a passo"],
         ["[b]SEE[/]", "Mostra a memória escolhida na simulação"],
         ["[b]STEP[/]", "Avança um passo na simulação"],

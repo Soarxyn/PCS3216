@@ -34,7 +34,7 @@ class _cmdLine(Widget):
     validCommands = [
         "home",
         "clear",
-        "run",
+        # "run",
         "simulate",
         "load",
         "unload",
